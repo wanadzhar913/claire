@@ -23,6 +23,7 @@ try:
     from backend.config import settings
     from backend.models.session import Session as ChatSession
     from backend.models.user import User
+    from backend.models.goal import Goal
     from backend.models.banking_transaction import BankingTransaction
     from backend.models.user_upload import UserUpload
 except ImportError:
@@ -37,6 +38,7 @@ except ImportError:
     from backend.config import settings
     from backend.models.session import Session as ChatSession
     from backend.models.user import User
+    from backend.models.goal import Goal
     from backend.models.banking_transaction import BankingTransaction
     from backend.models.user_upload import UserUpload
 
@@ -418,6 +420,87 @@ class DatabaseService:
             session.commit()
             session.refresh(user_upload)
             return user_upload
+
+    def create_goal(self, goal: Goal) -> Goal:
+        """Create a new financial goal."""
+        with Session(self.engine) as session:
+            session.add(goal)
+            session.commit()
+            session.refresh(goal)
+            return goal
+
+    def get_user_goals(
+        self,
+        user_id: int,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "created_at",
+        order_desc: bool = True,
+    ) -> List[Goal]:
+        """Get all goals for a user with optional pagination."""
+        with Session(self.engine) as session:
+            statement = select(Goal).where(Goal.user_id == user_id)
+
+            order_field = getattr(Goal, order_by, Goal.created_at)
+            statement = statement.order_by(order_field.desc() if order_desc else order_field.asc())
+
+            if offset > 0:
+                statement = statement.offset(offset)
+            if limit is not None:
+                statement = statement.limit(limit)
+
+            return session.exec(statement).all()
+
+    def get_goal(self, user_id: int, goal_id: str) -> Optional[Goal]:
+        """Get a single goal for a user (ownership enforced)."""
+        with Session(self.engine) as session:
+            statement = select(Goal).where(and_(Goal.user_id == user_id, Goal.id == goal_id))
+            return session.exec(statement).first()
+
+    def update_goal(
+        self,
+        user_id: int,
+        goal_id: str,
+        name: Optional[str] = None,
+        target_amount: Optional[Decimal] = None,
+        current_saved: Optional[Decimal] = None,
+        target_year: Optional[int] = None,
+        target_month: Optional[int] = None,
+        banner_key: Optional[str] = None,
+    ) -> Goal:
+        """Update a goal (ownership enforced)."""
+        with Session(self.engine) as session:
+            goal = session.exec(select(Goal).where(and_(Goal.user_id == user_id, Goal.id == goal_id))).first()
+            if not goal:
+                raise HTTPException(status_code=404, detail="Goal not found")
+
+            if name is not None:
+                goal.name = name
+            if target_amount is not None:
+                goal.target_amount = target_amount
+            if current_saved is not None:
+                goal.current_saved = current_saved
+            if target_year is not None:
+                goal.target_year = target_year
+            if target_month is not None:
+                goal.target_month = target_month
+            if banner_key is not None:
+                goal.banner_key = banner_key
+
+            session.add(goal)
+            session.commit()
+            session.refresh(goal)
+            return goal
+
+    def delete_goal(self, user_id: int, goal_id: str) -> bool:
+        """Delete a goal (ownership enforced)."""
+        with Session(self.engine) as session:
+            goal = session.exec(select(Goal).where(and_(Goal.user_id == user_id, Goal.id == goal_id))).first()
+            if not goal:
+                return False
+            session.delete(goal)
+            session.commit()
+            return True
 
     def get_user_uploads(
         self,

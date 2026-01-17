@@ -63,7 +63,22 @@ CREATE TABLE IF NOT EXISTS statement_banking_transaction (
     FOREIGN KEY (file_id) REFERENCES user_upload(file_id) ON DELETE CASCADE
 );
 
+-- User financial goals table
+CREATE TABLE IF NOT EXISTS user_goal (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    target_amount DECIMAL(15, 2) NOT NULL CHECK (target_amount >= 0),
+    current_saved DECIMAL(15, 2) NOT NULL DEFAULT 0 CHECK (current_saved >= 0),
+    target_year INTEGER NOT NULL,
+    target_month INTEGER NOT NULL CHECK (target_month >= 1 AND target_month <= 12),
+    banner_key TEXT NOT NULL CHECK (banner_key IN ('banner_1', 'banner_2', 'banner_3', 'banner_4')),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
+-- Indexes for goals
+CREATE INDEX IF NOT EXISTS idx_goal_user_id ON user_goal(user_id);
+CREATE INDEX IF NOT EXISTS idx_goal_user_created_at ON user_goal(user_id, created_at);
 
 -- Create indexes for frequently queried columns
 CREATE INDEX IF NOT EXISTS idx_user_email ON app_users(email);
