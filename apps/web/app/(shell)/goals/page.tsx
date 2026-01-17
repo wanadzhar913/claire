@@ -2,17 +2,36 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { LayoutGrid, List as ListIcon, Plus, Target } from "lucide-react"
+import { LayoutGrid, List as ListIcon, Plus, Target, Check } from "lucide-react"
 
 import { Goals } from "@/components/Goals"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { mockGoals, formatMYR, type Goal } from "@/lib/goals-data"
 import { cn } from "@/lib/utils"
 
+const BANNER_OPTIONS = [
+  "/banners/banner_1.jpg",
+  "/banners/banner_2.jpg",
+  "/banners/banner_3.jpg",
+  "/banners/banner_4.jpg",
+]
+
 export default function GoalsPage() {
   const [view, setView] = useState<"grid" | "list">("grid")
+  const [goals, setGoals] = useState<Goal[]>(mockGoals)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
 
   return (
     <div className="space-y-8">
@@ -44,7 +63,7 @@ export default function GoalsPage() {
               <span className="sr-only">List view</span>
             </Button>
           </div>
-          <Button size="sm" className="h-10 gap-2">
+          <Button size="sm" className="h-10 gap-2" onClick={() => setIsAddModalOpen(true)}>
             <Plus className="h-6 w-4" />
             Add Goal
           </Button>
@@ -52,14 +71,23 @@ export default function GoalsPage() {
       </div>
 
       {view === "list" ? (
-        <Goals goals={mockGoals} onAction={() => console.log("Goal action clicked")} />
+        <Goals goals={goals} onAction={() => console.log("Goal action clicked")} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mockGoals.map((goal) => (
+          {goals.map((goal) => (
             <GoalCard key={goal.id} goal={goal} />
           ))}
         </div>
       )}
+
+      <AddGoalDialog
+        open={isAddModalOpen}
+        onOpenChange={setIsAddModalOpen}
+        onAddGoal={(newGoal) => {
+          setGoals((prev) => [...prev, newGoal])
+          setIsAddModalOpen(false)
+        }}
+      />
     </div>
   )
 }
@@ -126,5 +154,176 @@ function GoalCard({ goal }: { goal: Goal }) {
         </Button>
       </CardFooter>
     </Card>
+  )
+}
+
+interface AddGoalDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onAddGoal: (goal: Goal) => void
+}
+
+function AddGoalDialog({ open, onOpenChange, onAddGoal }: AddGoalDialogProps) {
+  const [name, setName] = useState("")
+  const [targetAmount, setTargetAmount] = useState("")
+  const [targetDate, setTargetDate] = useState("")
+  const [currentSaved, setCurrentSaved] = useState("")
+  const [selectedBanner, setSelectedBanner] = useState(BANNER_OPTIONS[0])
+
+  const resetForm = () => {
+    setName("")
+    setTargetAmount("")
+    setTargetDate("")
+    setCurrentSaved("")
+    setSelectedBanner(BANNER_OPTIONS[0])
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const target = parseFloat(targetAmount) || 0
+    const current = parseFloat(currentSaved) || 0
+
+    // Format the date as "MMM YYYY"
+    let formattedDeadline: string | null = null
+    if (targetDate) {
+      const date = new Date(targetDate + "-01") // Add day to make valid date
+      formattedDeadline = date.toLocaleDateString("en-US", {
+        month: "short",
+        year: "numeric",
+      })
+    }
+
+    const newGoal: Goal = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      target,
+      current,
+      deadline: formattedDeadline,
+      status: "on-track",
+      nextAction: "Keep saving towards your goal!",
+      imageUrl: selectedBanner,
+    }
+
+    onAddGoal(newGoal)
+    resetForm()
+  }
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      resetForm()
+    }
+    onOpenChange(newOpen)
+  }
+
+  const isFormValid = name.trim() && targetAmount && parseFloat(targetAmount) > 0
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create New Goal</DialogTitle>
+          <DialogDescription>
+            Set up a new savings goal to track your progress.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="goal-name">Goal Name</Label>
+            <Input
+              id="goal-name"
+              placeholder="e.g., New Car"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="target-amount">Target Amount (MYR)</Label>
+              <Input
+                id="target-amount"
+                type="number"
+                placeholder="80000"
+                min="1"
+                value={targetAmount}
+                onChange={(e) => setTargetAmount(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="current-saved">Current Saved (MYR)</Label>
+              <Input
+                id="current-saved"
+                type="number"
+                placeholder="5000"
+                min="0"
+                value={currentSaved}
+                onChange={(e) => setCurrentSaved(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="target-date">Target Date</Label>
+            <Input
+              id="target-date"
+              type="month"
+              value={targetDate}
+              onChange={(e) => setTargetDate(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Banner Image</Label>
+            <div className="grid grid-cols-2 gap-3">
+              {BANNER_OPTIONS.map((banner) => (
+                <button
+                  key={banner}
+                  type="button"
+                  onClick={() => setSelectedBanner(banner)}
+                  className={cn(
+                    "relative aspect-video rounded-lg overflow-hidden border-2 transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                    selectedBanner === banner
+                      ? "border-primary ring-2 ring-primary/20"
+                      : "border-muted hover:border-muted-foreground/30"
+                  )}
+                >
+                  <Image
+                    src={banner}
+                    alt="Banner option"
+                    fill
+                    className="object-cover"
+                  />
+                  {selectedBanner === banner && (
+                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                      <div className="bg-primary text-primary-foreground rounded-full p-1">
+                        <Check className="h-4 w-4" />
+                      </div>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!isFormValid}>
+              Create Goal
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
