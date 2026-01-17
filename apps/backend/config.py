@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from functools import lru_cache
 from typing import List, Literal, Dict, ClassVar
@@ -6,11 +7,16 @@ from typing import List, Literal, Dict, ClassVar
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, ValidationError, TypeAdapter, field_validator, AnyHttpUrl
 
+# project root directory
+BASIC_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASIC_DIR.parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+sys.path.insert(0, str(BASIC_DIR))
 
 class AppSettings(BaseSettings):
     """Application settings."""
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).parent.parent.parent / ".env",
+        env_file=ROOT_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore"
     )
@@ -26,11 +32,17 @@ class AppSettings(BaseSettings):
     OPENAI_API_KEY: str
 
     # Database settings
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int = 5432
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
+    POSTGRES_POOL_SIZE: int = 10
+    POSTGRES_MAX_OVERFLOW: int = 5
 
     # Minio settings
+    MINIO_ENDPOINT: str
+    MINIO_SECURE: int = 0 # 0 for http, 1 for https
     MINIO_ROOT_USER: str
     MINIO_ROOT_PASSWORD: str
     MINIO_SECRET_KEY: str

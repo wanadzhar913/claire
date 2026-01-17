@@ -1,0 +1,551 @@
+"""This file contains the database service for the application."""
+
+from datetime import date
+from decimal import Decimal
+from typing import (
+    List,
+    Optional,
+)
+
+from fastapi import HTTPException
+from sqlalchemy import and_, or_
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import QueuePool
+from sqlmodel import (
+    Session,
+    SQLModel,
+    create_engine,
+    select,
+)
+
+# Try to import settings, with fallback for when running as script
+try:
+    from backend.config import settings
+    from backend.models.session import Session as ChatSession
+    from backend.models.user import User
+    from backend.models.banking_transaction import BankingTransaction
+    from backend.models.user_upload import UserUpload
+except ImportError:
+    # If running as script, add parent directory to path
+    import sys
+    from pathlib import Path
+    # File is at: apps/backend/services/document_parser/financial_text_extractor.py
+    # Need to add apps/ to path so backend can be imported
+    apps_dir = Path(__file__).parent.parent.parent.parent  # Go up to apps/
+    if str(apps_dir) not in sys.path:
+        sys.path.insert(0, str(apps_dir))
+    from backend.config import settings
+    from backend.models.session import Session as ChatSession
+    from backend.models.user import User
+    from backend.models.banking_transaction import BankingTransaction
+    from backend.models.user_upload import UserUpload
+
+
+class DatabaseService:
+    """Service class for database operations.
+
+    This class handles all database operations for Users, Sessions, and Messages.
+    It uses SQLModel for ORM operations and maintains a connection pool.
+    """
+
+    def __init__(self):
+        """Initialize database service with connection pool."""
+        try:
+            # Configure environment-specific database connection pool settings
+            pool_size = settings.POSTGRES_POOL_SIZE
+            max_overflow = settings.POSTGRES_MAX_OVERFLOW
+
+            # Create engine with appropriate pool configuration
+            connection_url = (
+                f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}"
+                f"@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
+            )
+
+            self.engine = create_engine(
+                connection_url,
+                pool_pre_ping=True,
+                poolclass=QueuePool,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_timeout=30,  # Connection timeout (seconds)
+                pool_recycle=1800,  # Recycle connections after 30 minutes
+            )
+
+            # Create tables (only if they don't exist)
+            SQLModel.metadata.create_all(self.engine)
+
+            # logger.info(
+            #     "database_initialized",
+            #     environment=settings.ENVIRONMENT.value,
+            #     pool_size=pool_size,
+            #     max_overflow=max_overflow,
+            # )
+        except SQLAlchemyError as e:
+            # logger.error("database_initialization_error", error=str(e), environment=settings.ENVIRONMENT.value)
+            raise
+
+    async def create_user(self, email: str, password: str) -> User:
+        """Create a new user.
+
+        Args:
+            email: User's email address
+            password: Hashed password
+
+        Returns:
+            User: The created user
+        """
+        with Session(self.engine) as session:
+            user = User(email=email, hashed_password=password)
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            # logger.info("user_created", email=email)
+            return user
+
+    async def get_user(self, user_id: int) -> Optional[User]:
+        """Get a user by ID.
+
+        Args:
+            user_id: The ID of the user to retrieve
+
+        Returns:
+            Optional[User]: The user if found, None otherwise
+        """
+        with Session(self.engine) as session:
+            user = session.get(User, user_id)
+            return user
+
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        """Get a user by email.
+
+        Args:
+            email: The email of the user to retrieve
+
+        Returns:
+            Optional[User]: The user if found, None otherwise
+        """
+        with Session(self.engine) as session:
+            statement = select(User).where(User.email == email)
+            user = session.exec(statement).first()
+            return user
+
+    async def delete_user_by_email(self, email: str) -> bool:
+        """Delete a user by email.
+
+        Args:
+            email: The email of the user to delete
+
+        Returns:
+            bool: True if deletion was successful, False if user not found
+        """
+        with Session(self.engine) as session:
+            user = session.exec(select(User).where(User.email == email)).first()
+            if not user:
+                return False
+
+            session.delete(user)
+            session.commit()
+            # logger.info("user_deleted", email=email)
+            return True
+
+    async def create_session(self, session_id: str, user_id: int, name: str = "") -> ChatSession:
+        """Create a new chat session.
+
+        Args:
+            session_id: The ID for the new session
+            user_id: The ID of the user who owns the session
+            name: Optional name for the session (defaults to empty string)
+
+        Returns:
+            ChatSession: The created session
+        """
+        with Session(self.engine) as session:
+            chat_session = ChatSession(id=session_id, user_id=user_id, name=name)
+            session.add(chat_session)
+            session.commit()
+            session.refresh(chat_session)
+            # logger.info("session_created", session_id=session_id, user_id=user_id, name=name)
+            return chat_session
+
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a session by ID.
+
+        Args:
+            session_id: The ID of the session to delete
+
+        Returns:
+            bool: True if deletion was successful, False if session not found
+        """
+        with Session(self.engine) as session:
+            chat_session = session.get(ChatSession, session_id)
+            if not chat_session:
+                return False
+
+            session.delete(chat_session)
+            session.commit()
+            # logger.info("session_deleted", session_id=session_id)
+            return True
+
+    async def get_session(self, session_id: str) -> Optional[ChatSession]:
+        """Get a session by ID.
+
+        Args:
+            session_id: The ID of the session to retrieve
+
+        Returns:
+            Optional[ChatSession]: The session if found, None otherwise
+        """
+        with Session(self.engine) as session:
+            chat_session = session.get(ChatSession, session_id)
+            return chat_session
+
+    async def get_user_sessions(self, user_id: int) -> List[ChatSession]:
+        """Get all sessions for a user.
+
+        Args:
+            user_id: The ID of the user
+
+        Returns:
+            List[ChatSession]: List of user's sessions
+        """
+        with Session(self.engine) as session:
+            statement = select(ChatSession).where(ChatSession.user_id == user_id).order_by(ChatSession.created_at)
+            sessions = session.exec(statement).all()
+            return sessions
+
+    async def update_session_name(self, session_id: str, name: str) -> ChatSession:
+        """Update a session's name.
+
+        Args:
+            session_id: The ID of the session to update
+            name: The new name for the session
+
+        Returns:
+            ChatSession: The updated session
+
+        Raises:
+            HTTPException: If session is not found
+        """
+        with Session(self.engine) as session:
+            chat_session = session.get(ChatSession, session_id)
+            if not chat_session:
+                raise HTTPException(status_code=404, detail="Session not found")
+
+            chat_session.name = name
+            session.add(chat_session)
+            session.commit()
+            session.refresh(chat_session)
+            # logger.info("session_name_updated", session_id=session_id, name=name)
+            return chat_session
+
+    def get_session_maker(self):
+        """Get a session maker for creating database sessions.
+
+        Returns:
+            Session: A SQLModel session maker
+        """
+        return Session(self.engine)
+
+    def create_banking_transaction(self, banking_transaction: BankingTransaction) -> BankingTransaction:
+        """Create a new banking transaction.
+
+        Args:
+            banking_transaction: The banking transaction to create
+
+        Returns:
+            BankingTransaction: The created banking transaction
+        """
+        with Session(self.engine) as session:
+            session.add(banking_transaction)
+            session.commit()
+            session.refresh(banking_transaction)
+            return banking_transaction
+
+    def create_banking_transactions_bulk(
+        self, banking_transactions: List[BankingTransaction]
+    ) -> List[BankingTransaction]:
+        """Create multiple banking transactions in bulk.
+
+        Args:
+            banking_transactions: List of banking transactions to create
+
+        Returns:
+            List[BankingTransaction]: List of created banking transactions
+
+        Raises:
+            ValueError: If the list is empty
+        """
+        if not banking_transactions:
+            raise ValueError("Cannot create empty list of banking transactions")
+
+        with Session(self.engine) as session:
+            session.add_all(banking_transactions)
+            session.commit()
+            # Refresh all transactions
+            for transaction in banking_transactions:
+                session.refresh(transaction)
+            return banking_transactions
+
+    def filter_banking_transactions(
+        self,
+        user_id: Optional[int] = None,
+        file_id: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        merchant_name: Optional[str] = None,
+        transaction_type: Optional[str] = None,
+        category: Optional[str] = None,
+        min_amount: Optional[Decimal] = None,
+        max_amount: Optional[Decimal] = None,
+        transaction_year: Optional[int] = None,
+        transaction_month: Optional[int] = None,
+        currency: Optional[str] = None,
+        description: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "transaction_date",
+        order_desc: bool = True,
+    ) -> List[BankingTransaction]:
+        """Filter banking transactions by various criteria.
+
+        Args:
+            user_id: Filter by user ID
+            file_id: Filter by file ID (user upload file ID)
+            start_date: Filter transactions from this date onwards (inclusive)
+            end_date: Filter transactions up to this date (inclusive)
+            merchant_name: Filter by merchant name (partial match, case-insensitive)
+            transaction_type: Filter by transaction type ('debit' or 'credit')
+            category: Filter by transaction category
+            min_amount: Minimum transaction amount (inclusive)
+            max_amount: Maximum transaction amount (inclusive)
+            transaction_year: Filter by transaction year
+            transaction_month: Filter by transaction month (1-12)
+            currency: Filter by currency code (e.g., 'MYR')
+            description: Filter by description (partial match, case-insensitive)
+            limit: Maximum number of results to return
+            offset: Number of results to skip (for pagination)
+            order_by: Field to order by (default: 'transaction_date')
+            order_desc: If True, order descending; if False, order ascending
+
+        Returns:
+            List[BankingTransaction]: List of matching banking transactions
+        """
+        with Session(self.engine) as session:
+            statement = select(BankingTransaction)
+            conditions = []
+
+            # Filter by user_id
+            if user_id is not None:
+                conditions.append(BankingTransaction.user_id == user_id)
+
+            # Filter by file_id
+            if file_id is not None:
+                conditions.append(BankingTransaction.file_id == file_id)
+
+            # Filter by date range
+            if start_date is not None:
+                conditions.append(BankingTransaction.transaction_date >= start_date)
+            if end_date is not None:
+                conditions.append(BankingTransaction.transaction_date <= end_date)
+
+            # Filter by merchant name (partial match, case-insensitive)
+            if merchant_name is not None:
+                conditions.append(
+                    BankingTransaction.merchant_name.ilike(f"%{merchant_name}%")
+                )
+
+            # Filter by transaction type
+            if transaction_type is not None:
+                conditions.append(BankingTransaction.transaction_type == transaction_type)
+
+            # Filter by category
+            if category is not None:
+                conditions.append(BankingTransaction.category == category)
+
+            # Filter by amount range
+            if min_amount is not None:
+                conditions.append(BankingTransaction.amount >= min_amount)
+            if max_amount is not None:
+                conditions.append(BankingTransaction.amount <= max_amount)
+
+            # Filter by year
+            if transaction_year is not None:
+                conditions.append(BankingTransaction.transaction_year == transaction_year)
+
+            # Filter by month
+            if transaction_month is not None:
+                conditions.append(BankingTransaction.transaction_month == transaction_month)
+
+            # Filter by currency
+            if currency is not None:
+                conditions.append(BankingTransaction.currency == currency)
+
+            # Filter by description (partial match, case-insensitive)
+            if description is not None:
+                conditions.append(BankingTransaction.description.ilike(f"%{description}%"))
+
+            # Apply all conditions
+            if conditions:
+                statement = statement.where(and_(*conditions))
+
+            # Apply ordering
+            order_field = getattr(BankingTransaction, order_by, BankingTransaction.transaction_date)
+            if order_desc:
+                statement = statement.order_by(order_field.desc())
+            else:
+                statement = statement.order_by(order_field.asc())
+
+            # Apply pagination
+            if offset > 0:
+                statement = statement.offset(offset)
+            if limit is not None:
+                statement = statement.limit(limit)
+
+            transactions = session.exec(statement).all()
+            return transactions
+
+    def create_user_upload(self, user_upload: UserUpload) -> UserUpload:
+        """Create a new user upload.
+
+        Args:
+            user_upload: The user upload to create
+
+        Returns:
+            UserUpload: The created user upload
+        """
+        with Session(self.engine) as session:
+            session.add(user_upload)
+            session.commit()
+            session.refresh(user_upload)
+            return user_upload
+
+    def get_user_uploads(
+        self,
+        user_id: Optional[int] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "created_at",
+        order_desc: bool = True,
+    ) -> List[UserUpload]:
+        """Get all user uploads with optional filtering and pagination.
+        
+        Args:
+            user_id: Optional filter by user ID. If None, returns uploads for all users.
+            limit: Maximum number of results to return
+            offset: Number of results to skip (for pagination)
+            order_by: Field to order by (default: 'created_at')
+            order_desc: If True, order descending; if False, order ascending
+            
+        Returns:
+            List[UserUpload]: List of user uploads
+        """
+        with Session(self.engine) as session:
+            statement = select(UserUpload)
+            
+            # Filter by user_id if provided
+            if user_id is not None:
+                statement = statement.where(UserUpload.user_id == user_id)
+            
+            # Apply ordering
+            order_field = getattr(UserUpload, order_by, UserUpload.created_at)
+            if order_desc:
+                statement = statement.order_by(order_field.desc())
+            else:
+                statement = statement.order_by(order_field.asc())
+            
+            # Apply pagination
+            if offset > 0:
+                statement = statement.offset(offset)
+            if limit is not None:
+                statement = statement.limit(limit)
+            
+            uploads = session.exec(statement).all()
+            return uploads
+
+    async def health_check(self) -> bool:
+        """Check database connection health.
+
+        Returns:
+            bool: True if database is healthy, False otherwise
+        """
+        try:
+            with Session(self.engine) as session:
+                # Execute a simple query to check connection
+                session.exec(select(1)).first()
+                return True
+        except Exception as e:
+            # logger.error("database_health_check_failed", error=str(e))
+            return False
+
+
+# Create a singleton instance
+database_service = DatabaseService()
+
+if __name__ == "__main__":
+    import asyncio
+    from decimal import Decimal
+    
+    async def main():
+        database_service = DatabaseService()
+
+        await database_service.create_user(
+            email="test@example.com",
+            password="test",
+        )
+
+        user = await database_service.get_user_by_email("test@example.com")
+        user_id = user.id if user else None
+
+        if not user_id:
+            print("Failed to create or retrieve user")
+            return
+
+        database_service.create_user_upload(
+            UserUpload(
+                file_id="1",
+                user_id=user_id,
+                file_name="Test file",
+                file_type="pdf",
+                file_size=100,
+                file_url="s3://bucket/test-file.pdf",
+                file_mime_type="application/pdf",
+                file_extension="pdf",
+                statement_type="banking_transaction",
+                expense_month=date.today().month,
+                expense_year=date.today().year,
+            )
+        )
+
+        uploads = database_service.get_user_uploads(user_id=user_id, limit=1)
+        file_id = uploads[0].file_id if uploads else None
+
+        if not file_id:
+            print("Failed to create or retrieve user upload")
+            return
+
+        database_service.create_banking_transaction(
+            BankingTransaction(
+                id="1",
+                user_id=user_id,
+                file_id=file_id,
+                transaction_date=date.today(),
+                transaction_year=date.today().year,
+                transaction_month=date.today().month,
+                transaction_day=date.today().day,
+                description="Test transaction",
+                amount=Decimal("100.00"),
+                transaction_type="debit",
+
+            )
+        )
+
+        print(database_service.filter_banking_transactions(
+            user_id=user_id,
+            start_date=date.today(),
+            end_date=date.today(),
+            transaction_type="debit",
+            min_amount=Decimal("100"),
+            max_amount=Decimal("1000"),
+        ))
+
+    asyncio.run(main())

@@ -7,21 +7,20 @@ This module extracts structured banking transaction data from various document f
 
 import io
 import os
-import uuid
-from datetime import datetime
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 import json
+import base64
+from pathlib import Path
+from datetime import datetime
+from typing import List, Dict, Any, Literal
 
-import openai
 from openai import OpenAI
 
 import pandas as pd
 
-
 # Try to import settings, with fallback for when running as script
 try:
     from backend.config import settings
+    from backend.schemas.transaction_category import FinancialTransactionCategory
 except ImportError:
     # If running as script, add parent directory to path
     import sys
@@ -32,6 +31,8 @@ except ImportError:
     if str(apps_dir) not in sys.path:
         sys.path.insert(0, str(apps_dir))
     from backend.config import settings
+    from backend.schemas.transaction_category import FinancialTransactionCategory
+
 
 class FinancialTextExtractor:
     """Extracts structured banking transaction data from financial documents."""
@@ -45,12 +46,12 @@ class FinancialTextExtractor:
         self.client = OpenAI(api_key=api_key)
     
     def extract_from_file(
-        self, 
-        file_path: str | Path, 
+        self,
+        file_path: str | Path | None = None,
         file_content: bytes | None = None,
         file_mime_type: str | None = None,
         user_upload_id: str | None = None,
-        transaction_id: str | None = None
+        backend: Literal["pypdf2", "openai"] = "openai",
     ) -> List[Dict[str, Any]]:
         """
         Extract banking transactions from a file.
@@ -60,7 +61,7 @@ class FinancialTextExtractor:
             file_content: Optional file content as bytes
             file_mime_type: MIME type of the file (e.g., 'application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             user_upload_id: Optional user upload ID to associate with transactions
-            
+            backend: Backend to use for extraction. Either "pypdf2" or "openai". For "openai", the text extraction is done by OpenAI. For "pypdf2", the text extraction is done by pypdf2.
         Returns:
             List of transaction dictionaries matching the statement_banking_transaction schema
         """
@@ -72,20 +73,23 @@ class FinancialTextExtractor:
         else:
             mime_type = self._get_mime_type_from_path(file_path)
         
-        # Extract text/data from file
-        if 'pdf' in mime_type.lower():
-            text_content = self._extract_from_pdf(file_path, file_content)
-        elif 'excel' in mime_type.lower() or 'spreadsheet' in mime_type.lower() or \
-             file_path.suffix.lower() in ['.xlsx', '.xls'] if isinstance(file_path, Path) else \
-             str(file_path).lower().endswith(('.xlsx', '.xls')):
-            text_content = self._extract_from_excel(file_path, file_content)
+        if backend == "pypdf2":
+            # Extract text/data from file
+            if 'pdf' in mime_type.lower():
+                text_content = self._extract_from_pdf(file_path, file_content)
+            elif 'excel' in mime_type.lower() or 'spreadsheet' in mime_type.lower() or \
+                file_path.suffix.lower() in ['.xlsx', '.xls'] if isinstance(file_path, Path) else \
+                str(file_path).lower().endswith(('.xlsx', '.xls')):
+                text_content = self._extract_from_excel(file_path, file_content)
+            else:
+                # Try to extract as text
+                text_content = self._extract_as_text(file_path, file_content)
+            
+            # Use OpenAI to extract structured data
+            transactions = self._extract_structured_data_using_pypdf2(text_content, user_upload_id)
         else:
-            # Try to extract as text
-            text_content = self._extract_as_text(file_path, file_content)
-        
-        # Use OpenAI to extract structured data
-        transactions = self._extract_structured_data(text_content, user_upload_id)
-        
+            # Use OpenAI to extract structured data
+            transactions = self._extract_structured_data_using_openai(file_path, file_content, mime_type, user_upload_id=user_upload_id)
         return transactions
     
     def _get_mime_type_from_path(self, file_path: str | Path) -> str:
@@ -208,50 +212,64 @@ class FinancialTextExtractor:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 return f.read()
     
-    def _extract_structured_data(
+    def _extract_structured_data_using_pypdf2(
         self, 
         text_content: str, 
         user_upload_id: str | None = None,
-        transaction_id: str | None = None
     ) -> List[Dict[str, Any]]:
         """
-        Use OpenAI to extract structured banking transaction data from text.
+        Uses pypdf2 to extract text from the file and then uses OpenAI to extract structured banking transaction data from text.
         
         Returns a list of transaction dictionaries matching the schema.
         """
-        system_prompt = """You are a financial data extraction expert specializing in Malaysian bank statements.
-Extract all banking transactions from the provided text and return them as a JSON array.
+        # Get valid category values from enum
+        valid_categories = [cat.value for cat in FinancialTransactionCategory]
+        categories_list = ", ".join([f"'{cat}'" for cat in valid_categories])
+        
+        system_prompt = f"""You are a financial data extraction expert specializing in Malaysian bank statements.
+        Extract all banking transactions from the provided text and return them as a JSON array.
 
-For each transaction, extract the following fields:
-- transaction_date: Date in YYYY-MM-DD format
-- description: Full transaction description
-- merchant_name: Extracted merchant/vendor name (if available)
-- amount: Transaction amount as a decimal number (always positive)
-- transaction_type: Either 'debit' (money going out) or 'credit' (money coming in)
-- balance: Account balance after transaction (if available)
-- reference_number: Transaction reference number (if available)
-- transaction_code: Bank transaction code (if available)
-- category: Transaction category (e.g., 'food', 'transport', 'shopping', 'bills', etc.) if inferable
-- currency: Currency code (default to 'MYR' for Malaysian Ringgit)
+        For each transaction, extract the following fields:
+        - transaction_date: Date in YYYY-MM-DD format
+        - description: Full transaction description
+        - merchant_name: Extracted merchant/vendor name (if available)
+        - amount: Transaction amount as a decimal number (always positive)
+        - transaction_type: Either 'debit' (money going out) or 'credit' (money coming in)
+        - balance: Account balance after transaction (if available)
+        - reference_number: Transaction reference number (if available)
+        - transaction_code: Bank transaction code (if available)
+        - category: Transaction category - MUST be one of the following valid values: {categories_list}. Use 'other' if the transaction doesn't fit any specific category.
+        - currency: Currency code (default to 'MYR' for Malaysian Ringgit)
 
-Important rules:
-1. Parse dates in various formats (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, etc.) and convert to YYYY-MM-DD
-2. Amounts should always be positive numbers
-3. Determine transaction_type based on context:
-   - Debit: Payments, purchases, withdrawals, transfers out
-   - Credit: Deposits, salary, refunds, transfers in
-4. Extract merchant_name from description when possible
-5. If balance is not provided, set to null
-6. If any optional field is not available, set to null
-7. Generate a category based on merchant_name and description if possible
+        Important rules:
+        1. Parse dates in various formats (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, etc.) and convert to YYYY-MM-DD
+        2. Amounts should always be positive numbers
+        3. Determine transaction_type based on context:
+        - Debit: Payments, purchases, withdrawals, transfers out
+        - Credit: Deposits, salary, refunds, transfers in
+        4. Extract merchant_name from description when possible
+        5. If balance is not provided, set to null
+        6. If any optional field is not available, set to null
+        7. Category field MUST use one of the valid category values listed above. Map common transaction types as follows:
+        - Income/salary/deposits → 'income'
+        - Rent/mortgage/housing → 'housing'
+        - Petrol/taxi/public transport/car payments → 'transportation'
+        - Restaurants/cafes/food delivery → 'food_and_dining_out'
+        - Movies/games/events/hobbies → 'entertainment'
+        - Medical/dental/pharmacy → 'healthcare'
+        - School/tuition/books/courses → 'education'
+        - Electricity/water/internet/phone bills → 'utilities'
+        - Supermarket/grocery stores → 'groceries'
+        - Netflix/Spotify/gym memberships → 'subscriptions_and_memberships'
+        - Anything else → 'other'
 
-Return ONLY valid JSON array, no additional text or markdown formatting."""
+        Return ONLY valid JSON array, no additional text or markdown formatting."""
 
         user_prompt = f"""Extract all banking transactions from the following text:
 
-{text_content}
+        {text_content}
 
-Return a JSON object with a "transactions" key containing an array of transaction objects with the fields specified above."""
+        Return a JSON object with a "transactions" key containing an array of transaction objects with the fields specified above."""
 
         try:
             response = self.client.chat.completions.create(
@@ -299,7 +317,135 @@ Return a JSON object with a "transactions" key containing an array of transactio
             # Transform to match database schema
             structured_transactions = []
             for tx in transactions:
-                structured_tx = self._transform_transaction(tx, user_upload_id, transaction_id)
+                structured_tx = self._transform_transaction(tx, user_upload_id)
+                if structured_tx:
+                    structured_transactions.append(structured_tx)
+            
+            return structured_transactions
+            
+        except Exception as e:
+            raise ValueError(f"Failed to extract structured data: {str(e)}")
+
+    def _extract_structured_data_using_openai(
+        self, 
+        file_path: str | Path | None = None,
+        file_content: bytes | None = None,
+        file_mime_type: str | None = None,
+        user_upload_id: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Uses pypdf2 to extract text from the file and then uses OpenAI to extract structured banking transaction data from text.
+        
+        Returns a list of transaction dictionaries matching the schema.
+        """
+        # Get valid category values from enum
+        valid_categories = [cat.value for cat in FinancialTransactionCategory]
+        categories_list = ", ".join([f"'{cat}'" for cat in valid_categories])
+        
+        system_prompt = f"""You are a financial data extraction expert specializing in Malaysian bank statements.
+        Extract all banking transactions from the provided text and return them as a JSON array.
+
+        For each transaction, extract the following fields:
+        - transaction_date: Date in YYYY-MM-DD format
+        - description: Full transaction description
+        - merchant_name: Extracted merchant/vendor name (if available)
+        - amount: Transaction amount as a decimal number (always positive)
+        - transaction_type: Either 'debit' (money going out) or 'credit' (money coming in)
+        - balance: Account balance after transaction (if available)
+        - reference_number: Transaction reference number (if available)
+        - transaction_code: Bank transaction code (if available)
+        - category: Transaction category - MUST be one of the following valid values: {categories_list}. Use 'other' if the transaction doesn't fit any specific category.
+        - currency: Currency code (default to 'MYR' for Malaysian Ringgit)
+
+        Important rules:
+        1. Parse dates in various formats (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, etc.) and convert to YYYY-MM-DD
+        2. Amounts should always be positive numbers
+        3. Determine transaction_type based on context:
+        - Debit: Payments, purchases, withdrawals, transfers out
+        - Credit: Deposits, salary, refunds, transfers in
+        4. Extract merchant_name from description when possible
+        5. If balance is not provided, set to null
+        6. If any optional field is not available, set to null
+        7. Category field MUST use one of the valid category values listed above. Map common transaction types as follows:
+        - Income/salary/deposits → 'income'
+        - Rent/mortgage/housing → 'housing'
+        - Petrol/taxi/public transport/car payments → 'transportation'
+        - Restaurants/cafes/food delivery → 'food_and_dining_out'
+        - Movies/games/events/hobbies → 'entertainment'
+        - Medical/dental/pharmacy → 'healthcare'
+        - School/tuition/books/courses → 'education'
+        - Electricity/water/internet/phone bills → 'utilities'
+        - Supermarket/grocery stores → 'groceries'
+        - Netflix/Spotify/gym memberships → 'subscriptions_and_memberships'
+        - Anything else → 'other'
+
+        Return ONLY valid JSON array, no additional text or markdown formatting."""
+
+        user_prompt = f"""Extract all banking transactions from the following file. Return a JSON object with a "transactions" key containing an array of transaction objects with the fields specified above."""
+
+        if file_path:
+            with open(file_path, "rb") as f:
+                file_content = f.read()
+
+        try:
+            response = self.client.responses.create(
+                model="gpt-4o-mini",  # or "gpt-4-turbo-preview" for better structured extraction
+                input=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": user_prompt
+                            },
+                            {
+                                "type": "input_file", 
+                                "filename": "financial_document",
+                                "file_data": f"data:{file_mime_type};base64,{base64.b64encode(file_content).decode('utf-8')}"
+                            }
+                        ]
+                    }
+                ],
+                temperature=0.1,  # Low temperature for consistent extraction
+            )
+            
+            # Parse the response
+            content = response.output_text
+            
+            # Try to extract JSON from the response
+            # Sometimes OpenAI wraps it in markdown code blocks
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            # Parse JSON
+            try:
+                data = json.loads(content)
+                # Handle both {"transactions": [...]} and [...] formats
+                if isinstance(data, dict) and "transactions" in data:
+                    transactions = data["transactions"]
+                elif isinstance(data, list):
+                    transactions = data
+                elif isinstance(data, dict):
+                    # Try to find any array value in the dict
+                    transactions = next((v for v in data.values() if isinstance(v, list)), [])
+                else:
+                    transactions = []
+            except json.JSONDecodeError:
+                # Try to find JSON array in the text
+                import re
+                json_match = re.search(r'\[.*\]', content, re.DOTALL)
+                if json_match:
+                    transactions = json.loads(json_match.group())
+                else:
+                    raise ValueError(f"Failed to parse JSON from OpenAI response: {content}")
+            
+            # Transform to match database schema
+            structured_transactions = []
+            for tx in transactions:
+                structured_tx = self._transform_transaction(tx, user_upload_id)
                 if structured_tx:
                     structured_transactions.append(structured_tx)
             
@@ -312,7 +458,6 @@ Return a JSON object with a "transactions" key containing an array of transactio
         self, 
         transaction: Dict[str, Any], 
         user_upload_id: str | None = None,
-        transaction_id: str | None = None,
     ) -> Dict[str, Any] | None:
         """
         Transform extracted transaction to match database schema.
@@ -386,12 +531,31 @@ Return a JSON object with a "transactions" key containing an array of transactio
             
             category = transaction.get('category')
             if category:
-                category = str(category).strip() or None
+                category = str(category).strip().lower()
+                # Validate category against enum values
+                valid_categories = [cat.value for cat in FinancialTransactionCategory]
+                if category not in valid_categories:
+                    # Try to find a close match or default to 'other'
+                    # Normalize common variations
+                    category_mapping = {
+                        'food': 'food_and_dining_out',
+                        'dining': 'food_and_dining_out',
+                        'restaurant': 'food_and_dining_out',
+                        'transport': 'transportation',
+                        'travel': 'transportation',
+                        'bills': 'utilities',
+                        'utilities': 'utilities',
+                        'shopping': 'other',
+                        'retail': 'other',
+                    }
+                    category = category_mapping.get(category, 'other')
+                category = category if category in valid_categories else None
+            else:
+                category = None
             
             currency = transaction.get('currency', 'MYR').strip().upper() or 'MYR'
             
             return {
-                'id': transaction_id,
                 'user_upload_id': user_upload_id or '',
                 'transaction_date': transaction_date.strftime('%Y-%m-%d'),
                 'transaction_year': transaction_year,
@@ -451,11 +615,10 @@ Return a JSON object with a "transactions" key containing an array of transactio
 
 # Convenience function for easy usage
 def extract_banking_transactions(
-    file_path: str | Path,
+    file_path: str | Path | None = None,
     file_content: bytes | None = None,
     file_mime_type: str | None = None,
     user_upload_id: str | None = None,
-    transaction_id: str | None = None
 ) -> List[Dict[str, Any]]:
     """
     Convenience function to extract banking transactions from a file.
@@ -475,18 +638,22 @@ def extract_banking_transactions(
         file_content=file_content,
         file_mime_type=file_mime_type,
         user_upload_id=user_upload_id,
-        transaction_id=transaction_id
     )
 
 if __name__ == "__main__":
     from pprint import pprint
-    transaction_id = str(uuid.uuid4())
     
-    file_path = Path(__file__).parent.parent.parent.parent.parent / "datasets" / "banking_transactions" / "Bank-Statement-Template-4-TemplateLab.pdf"
+    file_path = Path(__file__).parent.parent.parent.parent.parent / "datasets" / "banking_transactions" / "Bank Statement Example Final.pdf"
     assert file_path.exists(), f"File with file path {file_path} does not exist"
 
+    file_content = file_path.read_bytes()
+
     extractor = FinancialTextExtractor()
-    transactions = extractor._extract_from_pdf(
-        file_path=file_path
+    transactions = extractor.extract_from_file(
+        file_path=None,
+        file_content=file_content,
+        file_mime_type="application/pdf",
+        user_upload_id="1234567890",
+        backend="openai", # or "pypdf2"
     )
     pprint(transactions)

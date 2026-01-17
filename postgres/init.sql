@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS app_users (
 -- Create session table
 CREATE TABLE IF NOT EXISTS session (
     id TEXT PRIMARY KEY,
-    user_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     name TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS thread (
 -- Create user uploads table
 CREATE TABLE IF NOT EXISTS user_upload (
     file_id TEXT PRIMARY KEY,
-    user_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     file_name TEXT NOT NULL,
     file_type TEXT NOT NULL,
     file_size INTEGER NOT NULL,
@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS user_upload (
 -- Banking transactions table (structured fields for Malaysian bank statements)
 CREATE TABLE IF NOT EXISTS statement_banking_transaction (
     id TEXT PRIMARY KEY,
-    user_upload_id TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    file_id TEXT NOT NULL,
     transaction_date DATE NOT NULL,
     transaction_year INTEGER NOT NULL,
     transaction_month INTEGER NOT NULL,
@@ -51,14 +52,15 @@ CREATE TABLE IF NOT EXISTS statement_banking_transaction (
     description TEXT NOT NULL,
     merchant_name TEXT,
     amount DECIMAL(15, 2) NOT NULL,
-    transaction_type TEXT NOT NULL CHECK(transaction_type IN ('debit', 'credit')),
+    transaction_type TEXT NOT NULL CHECK(transaction_type IN ('debit', 'credit')), -- 'credit' means money coming in, 'debit' means money going out
     balance DECIMAL(15, 2),
     reference_number TEXT,
     transaction_code TEXT,
     category TEXT,
     currency TEXT NOT NULL DEFAULT 'MYR',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_upload_id) REFERENCES user_upload(file_id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (file_id) REFERENCES user_upload(file_id) ON DELETE CASCADE
 );
 
 
@@ -66,7 +68,8 @@ CREATE TABLE IF NOT EXISTS statement_banking_transaction (
 -- Create indexes for frequently queried columns
 CREATE INDEX IF NOT EXISTS idx_user_email ON app_users(email);
 CREATE INDEX IF NOT EXISTS idx_session_user_id ON session(user_id);
-CREATE INDEX IF NOT EXISTS idx_banking_transaction_upload_id ON statement_banking_transaction(user_upload_id);
+CREATE INDEX IF NOT EXISTS idx_banking_transaction_user_id ON statement_banking_transaction(user_id);
+CREATE INDEX IF NOT EXISTS idx_banking_transaction_file_id ON statement_banking_transaction(file_id);
 CREATE INDEX IF NOT EXISTS idx_banking_transaction_date ON statement_banking_transaction(transaction_date);
 CREATE INDEX IF NOT EXISTS idx_banking_transaction_year_month ON statement_banking_transaction(transaction_year, transaction_month);
 CREATE INDEX IF NOT EXISTS idx_banking_transaction_type ON statement_banking_transaction(transaction_type);

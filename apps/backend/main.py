@@ -5,7 +5,8 @@ from fastapi import FastAPI, status, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.config import settings
+from config import settings
+from api.v1.api import api_router
 
 app = FastAPI(
     title="Claire API",
@@ -21,6 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(api_router, prefix=settings.BACKEND_API_V1_STR)
 
 @app.get("/", tags=["Monitoring"])
 async def root(request: Request):

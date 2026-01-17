@@ -4,8 +4,9 @@ You'll first have to clone the project and then your can start it using `docker 
 git clone https://github.com/irfannaqieb/claire.git
 cd claire
 
-docker compose --env-file .env  up --build
-docker compose down -v
+docker compose --env-file .env up --build
+cd apps/backend && python3 -m main # if you run backend outside of docker compose change POSTGRES_HOST & MINIO_ENDPOINT to localhost
+docker compose down -v # end of session
 ```
 
 You'll be able to access the following services locally:
