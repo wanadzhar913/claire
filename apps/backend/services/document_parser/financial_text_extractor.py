@@ -328,7 +328,7 @@ class FinancialTextExtractor:
 
     def _extract_structured_data_using_openai(
         self, 
-        file_path: str | Path,
+        file_path: str | Path | None = None,
         file_content: bytes | None = None,
         file_mime_type: str | None = None,
         user_upload_id: str | None = None,
@@ -387,9 +387,6 @@ class FinancialTextExtractor:
             with open(file_path, "rb") as f:
                 file_content = f.read()
 
-        # if file_content:
-        #     file_content = io.BytesIO(file_content)
-
         try:
             response = self.client.responses.create(
                 model="gpt-4o-mini",  # or "gpt-4-turbo-preview" for better structured extraction
@@ -404,7 +401,7 @@ class FinancialTextExtractor:
                             },
                             {
                                 "type": "input_file", 
-                                "filename": file_path.name if isinstance(file_path, Path) else file_path,
+                                "filename": "financial_document",
                                 "file_data": f"data:{file_mime_type};base64,{base64.b64encode(file_content).decode('utf-8')}"
                             }
                         ]
@@ -649,10 +646,14 @@ if __name__ == "__main__":
     file_path = Path(__file__).parent.parent.parent.parent.parent / "datasets" / "banking_transactions" / "Bank Statement Example Final.pdf"
     assert file_path.exists(), f"File with file path {file_path} does not exist"
 
+    file_content = file_path.read_bytes()
+
     extractor = FinancialTextExtractor()
     transactions = extractor.extract_from_file(
-        file_path=file_path,
+        file_path=None,
+        file_content=file_content,
+        file_mime_type="application/pdf",
         user_upload_id="1234567890",
-        backend="pypdf2", # or "openai"
+        backend="openai", # or "pypdf2"
     )
     pprint(transactions)
