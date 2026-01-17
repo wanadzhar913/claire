@@ -45,7 +45,7 @@ const navigationItems = [
     icon: Target,
   },
   {
-    title: "Advice",
+    title: "AI Assistant",
     url: "/advice",
     icon: Lightbulb,
   },
