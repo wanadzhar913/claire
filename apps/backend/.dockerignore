@@ -1,0 +1,9 @@
+# environment files
+.venv/
+
+# Python
+__pycache__/
+
+
+# Other
+README.md
