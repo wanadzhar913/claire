@@ -17,4 +17,4 @@ __pycache__/
 
 # others
 .DS_Store
-.datasets/banking_transactions/164221-690806_20250131.pdf
+datasets/banking_transactions/164221-690806_20250131.pdf
