@@ -14,17 +14,35 @@ from typing import List, Dict, Any, Optional
 import json
 
 import openai
-import pandas as pd
 from openai import OpenAI
 
-from backend.config import settings
+import pandas as pd
+
+
+# Try to import settings, with fallback for when running as script
+try:
+    from backend.config import settings
+except ImportError:
+    # If running as script, add parent directory to path
+    import sys
+    from pathlib import Path
+    # File is at: apps/backend/services/document_parser/financial_text_extractor.py
+    # Need to add apps/ to path so backend can be imported
+    apps_dir = Path(__file__).parent.parent.parent.parent  # Go up to apps/
+    if str(apps_dir) not in sys.path:
+        sys.path.insert(0, str(apps_dir))
+    from backend.config import settings
 
 class FinancialTextExtractor:
     """Extracts structured banking transaction data from financial documents."""
     
     def __init__(self):
         """Initialize the extractor with OpenAI client."""
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Use settings if available, otherwise fall back to environment variable
+        api_key = getattr(settings, 'OPENAI_API_KEY', None) or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY must be set in environment or config")
+        self.client = OpenAI(api_key=api_key)
     
     def extract_from_file(
         self, 
@@ -459,8 +477,8 @@ def extract_banking_transactions(
     )
 
 if __name__ == "__main__":
-    file_path = Path(__file__).parent.parent.parent.parent.parent / "datasets" / "banking_transactions" / "Bank-Statement-Template-3-TemplateLab.pdf"
-    assert file_path.exists(), "File does not exist"
+    file_path = Path(__file__).parent.parent.parent.parent.parent / "datasets" / "banking_transactions" / "Bank Statement Example Final.pdf"
+    assert file_path.exists(), f"File with file path {file_path} does not exist"
 
     extractor = FinancialTextExtractor()
     transactions = extractor.extract_from_file(
