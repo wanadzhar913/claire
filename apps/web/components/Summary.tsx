@@ -62,7 +62,7 @@ interface SummaryProps {
 
 export function Summary({ onClose, onViewDetails }: SummaryProps) {
   return (
-    <Card className="w-full max-w-md border shadow-lg bg-background">
+    <Card className="w-full border shadow-lg bg-background">
       {/* Header */}
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">

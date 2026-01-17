@@ -1,6 +1,7 @@
 "use client"
 
 import { UploadForm } from "@/components/UploadForm"
+import { Goals } from "@/components/Goals"
 import { Summary } from "@/components/Summary"
 import { SankeyDiagram } from "@/components/SankeyDiagram"
 import { Subscriptions } from "@/components/subscriptions"
@@ -26,7 +27,8 @@ export default function TestPage() {
           <Subscriptions />
         </section>
         
-        <section className="flex items-center justify-center">
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Goals onAction={() => console.log("Goal action clicked")} />
           <Summary 
             onClose={() => console.log("Close clicked")}
             onViewDetails={() => console.log("View details clicked")}
