@@ -47,30 +47,30 @@ async def query_transactions_all(
     - Currency and description search
     
     Args:
-        user_id: Filter by user ID
-        file_id: Filter by file ID (user upload file ID)
-        start_date: Filter transactions from this date onwards (inclusive)
-        end_date: Filter transactions up to this date (inclusive)
-        merchant_name: Filter by merchant name (partial match, case-insensitive)
-        transaction_type: Filter by transaction type ('debit' or 'credit')
-        category: Filter by transaction category
-        min_amount: Minimum transaction amount (inclusive)
-        max_amount: Maximum transaction amount (inclusive)
-        is_subscription: Filter by subscription status (likely to recur monthly)
-        transaction_year: Filter by transaction year
-        transaction_month: Filter by transaction month (1-12)
-        currency: Filter by currency code (e.g., 'MYR')
-        description: Filter by description (partial match, case-insensitive)
-        limit: Maximum number of results to return
-        offset: Number of results to skip (for pagination)
-        order_by: Field to order by (default: 'transaction_date')
-        order_desc: If True, order descending; if False, order ascending
+    - `user_id`: Filter by user ID
+    - `file_id`: Filter by file ID (user upload file ID)
+    - `start_date`: Filter transactions from this date onwards (inclusive)
+    - `end_date`: Filter transactions up to this date (inclusive)
+    - `merchant_name`: Filter by merchant name (partial match, case-insensitive)
+    - `transaction_type`: Filter by transaction type ('debit' or 'credit')
+    - `category`: Filter by transaction category
+    - `min_amount`: Minimum transaction amount (inclusive)
+    - `max_amount`: Maximum transaction amount (inclusive)
+    - `is_subscription`: Filter by subscription status (likely to recur monthly)
+    - `transaction_year`: Filter by transaction year
+    - `transaction_month`: Filter by transaction month (1-12)
+    - `currency`: Filter by currency code (e.g., 'MYR')
+    - `description`: Filter by description (partial match, case-insensitive)
+    - `limit`: Maximum number of results to return
+    - `offset`: Number of results to skip (for pagination)
+    - `order_by`: Field to order by (default: 'transaction_date')
+    - `order_desc`: If True, order descending; if False, order ascending
         
     Returns:
-        List[BankingTransactionResponse]: List of matching banking transactions
+    - `List[BankingTransactionResponse]`: List of matching banking transactions
         
     Raises:
-        HTTPException: If query fails
+    - `HTTPException`: If query fails
     """
     try:
         transactions = database_service.filter_banking_transactions(
@@ -156,30 +156,30 @@ async def query_transactions_sankey_diagram(
     - Currency and description search
     
     Args:
-        user_id: Filter by user ID
-        file_id: Filter by file ID (user upload file ID)
-        start_date: Filter transactions from this date onwards (inclusive)
-        end_date: Filter transactions up to this date (inclusive)
-        merchant_name: Filter by merchant name (partial match, case-insensitive)
-        transaction_type: Filter by transaction type ('debit' or 'credit')
-        category: Filter by transaction category
-        min_amount: Minimum transaction amount (inclusive)
-        max_amount: Maximum transaction amount (inclusive)
-        is_subscription: Filter by subscription status (likely to recur monthly)
-        transaction_year: Filter by transaction year
-        transaction_month: Filter by transaction month (1-12)
-        currency: Filter by currency code (e.g., 'MYR')
-        description: Filter by description (partial match, case-insensitive)
-        limit: Maximum number of results to return
-        offset: Number of results to skip (for pagination)
-        order_by: Field to order by (default: 'transaction_date')
-        order_desc: If True, order descending; if False, order ascending
+    - `user_id`: Filter by user ID
+    - `file_id`: Filter by file ID (user upload file ID)
+    - `start_date`: Filter transactions from this date onwards (inclusive)
+    - `end_date`: Filter transactions up to this date (inclusive)
+    - `merchant_name`: Filter by merchant name (partial match, case-insensitive)
+    - `transaction_type`: Filter by transaction type ('debit' or 'credit')
+    - `category`: Filter by transaction category
+    - `min_amount`: Minimum transaction amount (inclusive)
+    - `max_amount`: Maximum transaction amount (inclusive)
+    - `is_subscription`: Filter by subscription status (likely to recur monthly)
+    - `transaction_year`: Filter by transaction year
+    - `transaction_month`: Filter by transaction month (1-12)
+    - `currency`: Filter by currency code (e.g., 'MYR')
+    - `description`: Filter by description (partial match, case-insensitive)
+    - `limit`: Maximum number of results to return
+    - `offset`: Number of results to skip (for pagination)
+    - `order_by`: Field to order by (default: 'transaction_date')
+    - `order_desc`: If True, order descending; if False, order ascending
         
     Returns:
-        List[Dict[str, Any]]: List of matching banking transactions converted to a dictionary format for sankey diagram
+    - `List[Dict[str, Any]]`: List of matching banking transactions converted to a dictionary format for sankey diagram
         
     Raises:
-        HTTPException: If query fails
+    - `HTTPException`: If query fails
     """
     try:
         transactions = database_service.filter_banking_transactions(
@@ -237,18 +237,18 @@ async def query_subscriptions_all(
     All other filter parameters work the same as the general transactions endpoint.
     
     Args:
-        user_id: Filter by user ID
-        transaction_year: Filter by transaction year
-        limit: Maximum number of results to return
-        offset: Number of results to skip (for pagination)
-        order_by: Field to order by (default: 'transaction_date')
-        order_desc: If True, order descending; if False, order ascending
+    - `user_id`: Filter by user ID
+    - `transaction_year`: Filter by transaction year
+    - `limit`: Maximum number of results to return
+    - `offset`: Number of results to skip (for pagination)
+    - `order_by`: Field to order by (default: 'transaction_date')
+    - `order_desc`: If True, order descending; if False, order ascending
         
     Returns:
-        List[BankingTransactionResponse]: List of matching subscription transactions
+    - `List[BankingTransactionResponse]`: List of matching subscription transactions
         
     Raises:
-        HTTPException: If query fails
+    - `HTTPException`: If query fails
     """
     try:
         transactions = database_service.filter_banking_transactions(
@@ -307,12 +307,12 @@ async def query_subscriptions_aggregated(
     All other filter parameters work the same as the general transactions endpoint.
     
     Args:
-        user_id: Filter by user ID
-        transaction_year: Filter by transaction year
-        limit: Maximum number of results to return
-        offset: Number of results to skip (for pagination)
-        order_by: Field to order by (default: 'transaction_date')
-        order_desc: If True, order descending; if False, order ascending
+    - `user_id`: Filter by user ID
+    - `transaction_year`: Filter by transaction year
+    - `limit`: Maximum number of results to return
+    - `offset`: Number of results to skip (for pagination)
+    - `order_by`: Field to order by (default: 'transaction_date')
+    - `order_desc`: If True, order descending; if False, order ascending
         
     Returns:
         List[Dict[str, Any]]: List of matching subscription transactions aggregated by `merchant_name` and `category`

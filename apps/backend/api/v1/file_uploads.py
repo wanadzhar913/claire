@@ -47,14 +47,14 @@ async def upload_file(
     """Upload a file and process it to extract banking transactions.
     
     Args:
-        file: The file to upload
-        user_id: User ID (from authentication)
-        statement_type: Type of statement (banking_transaction, receipt, invoice, other)
-        expense_month: Month of the expense (1-12), defaults to current month
-        expense_year: Year of the expense, defaults to current year
+    - `file`: The file to upload
+    - `user_id`: User ID (from authentication)
+    - `statement_type`: Type of statement (banking_transaction, receipt, invoice, other)
+    - `expense_month`: Month of the expense (1-12), defaults to current month
+    - `expense_year`: Year of the expense, defaults to current year
         
     Returns:
-        Dictionary with upload details and extracted transaction count
+    - Dictionary with upload details and extracted transaction count
     """
     try:
         # Read file content
@@ -182,14 +182,14 @@ async def list_user_uploads(
     """List all user uploads with pagination.
     
     Args:
-        user_id: User ID (from authentication)
-        limit: Maximum number of results (1-100)
-        offset: Number of results to skip
-        order_by: Field to order by
-        order_desc: Order descending if True, ascending if False
+    - `user_id`: User ID (from authentication)
+    - `limit`: Maximum number of results (1-100)
+    - `offset`: Number of results to skip
+    - `order_by`: Field to order by
+    - `order_desc`: Order descending if True, ascending if False
         
     Returns:
-        Dictionary with uploads list and pagination info
+    - Dictionary with uploads list and pagination info
     """
     uploads = database_service.get_user_uploads(
         user_id=user_id,
@@ -228,11 +228,11 @@ async def download_user_upload(
     """Download a user upload file.
     
     Args:
-        file_id: File ID to download
-        user_id: User ID (from authentication)
+    - `file_id`: File ID to download
+    - `user_id`: User ID (from authentication)
         
     Returns:
-        StreamingResponse with file content
+    - StreamingResponse with file content
     """
     # Get user upload to verify ownership
     uploads = database_service.get_user_uploads(user_id=user_id)
