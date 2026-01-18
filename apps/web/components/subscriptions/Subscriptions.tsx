@@ -28,6 +28,7 @@ import type { Scope } from "@/types/scope"
 import { useApi } from "@/hooks/use-api"
 import type { BankingTransaction, ClassificationSummary, SubscriptionAggregated } from "./api-types"
 import { NeedsReviewQueue } from "./NeedsReviewQueue"
+import { SubscriptionCalendar } from "./SubscriptionCalendar"
 
 interface SubscriptionsProps {
   showFlaggedReview?: boolean
@@ -39,6 +40,7 @@ export function Subscriptions({ showFlaggedReview = true, className, scope }: Su
   const { get, post, isLoaded, isSignedIn } = useApi()
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [needsReview, setNeedsReview] = useState<BankingTransaction[]>([])
+  const [subscriptionTransactions, setSubscriptionTransactions] = useState<BankingTransaction[]>([])
   const [isDetecting, setIsDetecting] = useState(false)
   const [isReviewing, setIsReviewing] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
@@ -87,6 +89,11 @@ export function Subscriptions({ showFlaggedReview = true, className, scope }: Su
       `/api/v1/query/transactions/subscriptions/needs-review${scopeQueryString}`
     )
 
+    // subscription transactions (for calendar + details)
+    const txs = await get<BankingTransaction[]>(
+      `/api/v1/query/transactions/subscriptions${scopeQueryString}`
+    )
+
     // Map aggregated subscriptions into the existing UI model (minimal fields)
     const mapped: Subscription[] = (aggregated || []).map((s) => ({
       id: s.merchant_key,
@@ -106,6 +113,7 @@ export function Subscriptions({ showFlaggedReview = true, className, scope }: Su
 
     setSubscriptions(mapped)
     setNeedsReview(needs || [])
+    setSubscriptionTransactions(txs || [])
   }, [get, isLoaded, isSignedIn, scope, scopeQueryString])
 
   React.useEffect(() => {
@@ -232,149 +240,166 @@ export function Subscriptions({ showFlaggedReview = true, className, scope }: Su
           </section>
         )}
 
-        {subscriptions.length > 0 && (
-          <section>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold">All Subscriptions ({subscriptions.length})</h2>
-          </div>
-
-        {/* Desktop Card View */}
-        <div className="hidden md:block space-y-3">
-          {subscriptions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <CreditCard className="w-12 h-12 text-muted-foreground mb-4 opacity-50" />
-              <p className="text-base font-medium text-muted-foreground">
-                No subscriptions detected
-              </p>
+        {/* B. Calendar + subscriptions list (side-by-side on desktop) */}
+        {hasAnyData && (
+          <section className="grid gap-6 md:grid-cols-[1.05fr_0.95fr] md:items-start">
+            <div className="min-w-0">
+              <SubscriptionCalendar
+                subscriptions={subscriptions}
+                transactions={subscriptionTransactions}
+                monthlySpend={totalMonthly}
+                className="mx-0 max-w-none"
+              />
             </div>
-          ) : (
-            paginatedSubscriptions.map((subscription) => (
-              <div
-                key={subscription.id}
-                className="py-4 px-4 rounded-lg border cursor-pointer transition-colors hover:bg-muted/20"
-                role="button"
-                tabIndex={0}
-                onClick={() => setDetailsDialog({ open: true, subscription })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    setDetailsDialog({ open: true, subscription })
-                  }
-                }}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <SubscriptionLogo
-                      name={subscription.name}
-                      logo={subscription.logo}
-                    />
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{subscription.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {subscription.category}
+
+            {subscriptions.length > 0 && (
+              <div className="min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                  <h2 className="text-lg font-semibold">
+                    All Subscriptions ({subscriptions.length})
+                  </h2>
+                </div>
+
+                {/* Desktop Card View */}
+                <div className="hidden md:block space-y-3">
+                  {subscriptions.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <CreditCard className="w-12 h-12 text-muted-foreground mb-4 opacity-50" />
+                      <p className="text-base font-medium text-muted-foreground">
+                        No subscriptions detected
                       </p>
                     </div>
-                  </div>
+                  ) : (
+                    paginatedSubscriptions.map((subscription) => (
+                      <div
+                        key={subscription.id}
+                        className="py-3 px-3 rounded-lg border cursor-pointer transition-colors hover:bg-muted/20"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setDetailsDialog({ open: true, subscription })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            setDetailsDialog({ open: true, subscription })
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                            <SubscriptionLogo
+                              name={subscription.name}
+                              logo={subscription.logo}
+                            />
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{subscription.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {subscription.category}
+                              </p>
+                            </div>
+                          </div>
 
-                  <div className="text-right">
-                    <p className="font-medium">
-                      {formatCurrency(subscription.amount)}
-                    </p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {subscription.frequency}
-                    </p>
-                  </div>
+                          <div className="text-right">
+                            <p className="font-medium">
+                              {formatCurrency(subscription.amount)}
+                            </p>
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {subscription.frequency}
+                            </p>
+                          </div>
 
-                  <div className="flex items-center gap-1">
-                    <ActionMenu
-                      subscription={subscription}
-                      onAction={handleAction}
-                    />
-                  </div>
+                          <div className="flex items-center gap-1">
+                            <ActionMenu
+                              subscription={subscription}
+                              onAction={handleAction}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {subscriptions.length > 0 && totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-4 pt-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={currentPage === 0}
+                        onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        {currentPage + 1} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={currentPage >= totalPages - 1}
+                        onClick={() =>
+                          setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
+                        }
+                        aria-label="Next page"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
+                  {subscriptions.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <CreditCard className="w-12 h-12 text-muted-foreground mb-4 opacity-50" />
+                      <p className="text-base font-medium text-muted-foreground">
+                        No subscriptions detected
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {paginatedSubscriptions.map((subscription) => (
+                        <MobileSubscriptionCard
+                          key={subscription.id}
+                          subscription={subscription}
+                          onAction={handleAction}
+                          onOpenDetails={() => setDetailsDialog({ open: true, subscription })}
+                        />
+                      ))}
+                    </>
+                  )}
+
+                  {subscriptions.length > 0 && totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-4 pt-1">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={currentPage === 0}
+                        onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        {currentPage + 1} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={currentPage >= totalPages - 1}
+                        onClick={() =>
+                          setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
+                        }
+                        aria-label="Next page"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
-            ))
-          )}
-
-          {subscriptions.length > 0 && totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 pt-2">
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={currentPage === 0}
-                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {currentPage + 1} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={currentPage >= totalPages - 1}
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
-                }
-                aria-label="Next page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          )}
-
-        </div>
-
-        {/* Mobile Card View */}
-        <div className="md:hidden space-y-3">
-          {subscriptions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <CreditCard className="w-12 h-12 text-muted-foreground mb-4 opacity-50" />
-              <p className="text-base font-medium text-muted-foreground">
-                No subscriptions detected
-              </p>
-            </div>
-          ) : (
-            <>
-              {paginatedSubscriptions.map((subscription) => (
-                <MobileSubscriptionCard
-                  key={subscription.id}
-                  subscription={subscription}
-                  onAction={handleAction}
-                  onOpenDetails={() => setDetailsDialog({ open: true, subscription })}
-                />
-              ))}
-            </>
-          )}
-
-          {subscriptions.length > 0 && totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 pt-1">
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={currentPage === 0}
-                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {currentPage + 1} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={currentPage >= totalPages - 1}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
-                aria-label="Next page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-      </section>
+            )}
+          </section>
         )}
 
         {/* Needs review section */}
