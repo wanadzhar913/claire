@@ -101,4 +101,9 @@ def prepare_messages(messages: list[Message], llm: BaseChatModel, system_prompt:
         else:
             raise
 
-    return [Message(role="system", content=system_prompt)] + trimmed_messages
+
+    system_prompt_safe = system_prompt or ""
+    if len(system_prompt_safe) > 4900:
+        system_prompt_safe = system_prompt_safe[:4900] + "\n…(system prompt truncated)"
+
+    return [Message(role="system", content=system_prompt_safe)] + trimmed_messages

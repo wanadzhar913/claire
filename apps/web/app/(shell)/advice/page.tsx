@@ -1,6 +1,6 @@
 "use client"
 
-import { Lightbulb } from "lucide-react"
+import { Chat } from "@/components/Chat"
 
 export default function AdvicePage() {
   return (
@@ -12,15 +12,7 @@ export default function AdvicePage() {
         </p>
       </div>
 
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <Lightbulb className="w-12 h-12 text-muted-foreground mb-4 opacity-50" />
-        <p className="text-lg font-medium text-muted-foreground">
-          Advice page coming soon
-        </p>
-        <p className="text-sm text-muted-foreground mt-2">
-          This page will provide personalized financial advice and recommendations.
-        </p>
-      </div>
+      <Chat />
     </div>
   )
 }

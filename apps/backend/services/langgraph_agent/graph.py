@@ -39,6 +39,7 @@ from backend.schemas.graph import (
     GraphState,
 )
 from backend.services.langgraph_agent.llm import llm_service
+from backend.services.db.postgres_connector import database_service
 from backend.utils.graph import (
     dump_messages,
     prepare_messages,
@@ -148,7 +149,7 @@ class LangGraphAgent:
             results = await memory.search(user_id=str(user_id), query=query)
             print(results)
             return "\n".join([f"* {result['memory']}" for result in results["results"]])
-        except Exception as e:
+        except Exception:
             # logger.error("failed_to_get_relevant_memory", error=str(e), user_id=user_id, query=query)
             return ""
 
@@ -164,7 +165,7 @@ class LangGraphAgent:
             memory = await self._long_term_memory()
             await memory.add(messages, user_id=str(user_id), metadata=metadata)
             # logger.info("long_term_memory_updated_successfully", user_id=user_id)
-        except Exception as e:
+        except Exception:
             # logger.exception(
             #     "failed_to_update_long_term_memory",
             #     user_id=user_id,
@@ -182,15 +183,45 @@ class LangGraphAgent:
         Returns:
             Command: Command object with updated state and next node to execute.
         """
-        # Get the current LLM instance for metrics
+        # Get the current LLM instance for token counting / trimming
         current_llm = self.llm_service.get_llm()
-        model_name = (
-            current_llm.model_name
-            if current_llm and hasattr(current_llm, "model_name")
-            else settings.DEFAULT_LLM_MODEL
-        )
 
-        SYSTEM_PROMPT = load_system_prompt(long_term_memory=state.long_term_memory)
+        # Deterministically load saved goals into context so the model doesn't need
+        # to "decide" to call a tool before it can answer goal-tracking questions.
+        goals_context = ""
+        try:
+            if state.user_id is not None:
+                goals = await asyncio.to_thread(
+                    database_service.get_user_goals,
+                    user_id=int(state.user_id),
+                    limit=25,
+                    offset=0,
+                    order_by="created_at",
+                    order_desc=True,
+                )
+                if goals:
+                    lines: list[str] = []
+                    for g in goals:
+                        lines.append(
+                            f"- {g.name}: target MYR {g.target_amount} by {g.target_month:02d}/{g.target_year}, "
+                            f"current_saved MYR {g.current_saved}"
+                        )
+                    goals_context = "\n".join(lines)
+                else:
+                    goals_context = "No saved goals found."
+        except Exception:
+            goals_context = "Saved goals unavailable (DB error)."
+
+        # Keep prompt bounded because Message.content has a max_length (currently 5000).
+        long_term_memory = (state.long_term_memory or "").strip()
+        if len(long_term_memory) > 2200:
+            long_term_memory = long_term_memory[:2200] + "\n…(truncated)"
+
+        goals_context = (goals_context or "").strip()
+        if len(goals_context) > 1200:
+            goals_context = goals_context[:1200] + "\n…(truncated)"
+
+        SYSTEM_PROMPT = load_system_prompt(long_term_memory=long_term_memory, goals_context=goals_context)
 
         # Prepare messages with system prompt
         messages = prepare_messages(state.messages, current_llm, SYSTEM_PROMPT)
@@ -237,7 +268,16 @@ class LangGraphAgent:
         """
         outputs = []
         for tool_call in state.messages[-1].tool_calls:
-            tool_result = await self.tools_by_name[tool_call["name"]].ainvoke(tool_call["args"])
+            tool_args = dict(tool_call.get("args") or {})
+
+            if state.user_id is not None and tool_call.get("name") in {
+                "query_subscriptions_aggregated",
+                "query_transactions_sankey",
+                "query_user_goals",
+            }:
+                tool_args["user_id"] = int(state.user_id)
+
+            tool_result = await self.tools_by_name[tool_call["name"]].ainvoke(tool_args)
             outputs.append(
                 ToolMessage(
                     content=tool_result,
@@ -296,7 +336,7 @@ class LangGraphAgent:
         self,
         messages: list[Message],
         session_id: str,
-        user_id: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> list[dict]:
         """Get a response from the LLM.
 
@@ -325,7 +365,11 @@ class LangGraphAgent:
         ) or "No relevant memory found."
         try:
             response = await self._graph.ainvoke(
-                input={"messages": dump_messages(messages), "long_term_memory": relevant_memory},
+                input={
+                    "messages": dump_messages(messages),
+                    "long_term_memory": relevant_memory,
+                    "user_id": user_id,
+                },
                 config=config,
             )
             # Run memory update in background without blocking the response
@@ -335,12 +379,12 @@ class LangGraphAgent:
                 )
             )
             return self.__process_messages(response["messages"])
-        except Exception as e:
+        except Exception:
             # logger.error(f"Error getting response: {str(e)}")
             pass
 
     async def get_stream_response(
-        self, messages: list[Message], session_id: str, user_id: Optional[str] = None
+        self, messages: list[Message], session_id: str, user_id: Optional[int] = None
     ) -> AsyncGenerator[str, None]:
         """Get a stream response from the LLM.
 
@@ -375,13 +419,41 @@ class LangGraphAgent:
 
         try:
             async for token, _ in self._graph.astream(
-                {"messages": dump_messages(messages), "long_term_memory": relevant_memory},
+                {
+                    "messages": dump_messages(messages),
+                    "long_term_memory": relevant_memory,
+                    "user_id": user_id,
+                },
                 config,
                 stream_mode="messages",
             ):
                 try:
-                    yield token.content
-                except Exception as token_error:
+                    # Do not stream tool messages (they often contain raw JSON payloads like Sankey data).
+                    # NOTE: LangGraph/LangChain may emit different AI message classes (AIMessage, AIMessageChunk, etc.),
+                    # so filtering purely on `type == "ai"` can accidentally hide all assistant output.
+                    if isinstance(token, ToolMessage):
+                        continue
+
+                    content = getattr(token, "content", "")
+
+                    # Some models return structured content blocks; extract only the user-visible text.
+                    text_parts: list[str] = []
+                    if isinstance(content, str):
+                        text_parts = [content]
+                    elif isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str):
+                                text_parts.append(block["text"])
+                            elif isinstance(block, str):
+                                text_parts.append(block)
+                    elif content is not None:
+                        text_parts = [str(content)]
+
+                    if text_parts:
+                        text = "".join(text_parts)
+                        if text:
+                            yield text
+                except Exception:
                     # logger.error("Error processing token", error=str(token_error), session_id=session_id)
                     # Continue with next token even if current one fails
                     continue
@@ -443,10 +515,10 @@ class LangGraphAgent:
                     try:
                         await conn.execute(f"DELETE FROM {table} WHERE thread_id = %s", (session_id,))
                         # logger.info(f"Cleared {table} for session {session_id}")
-                    except Exception as e:
+                    except Exception:
                         # logger.error(f"Error clearing {table}", error=str(e))
                         raise
 
-        except Exception as e:
+        except Exception:
             # logger.error("Failed to clear chat history", error=str(e))
             raise

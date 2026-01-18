@@ -37,10 +37,9 @@ agent = LangGraphAgent()
 # )
 # security = HTTPBearer()
 
-# TODO: Implement this function (and Auth & JWT in general)
-async def get_current_session(
-    # credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> Session:
+# TODO: Implement JWT verification properly. For now, support per-user sessions via headers
+# forwarded by the Next.js adapter route.
+async def get_current_session(request: Request) -> Session:
     """Get the current session ID from the token.
 
     Args:
@@ -86,7 +85,25 @@ async def get_current_session(
     #         detail="Invalid token format",
     #         headers={"WWW-Authenticate": "Bearer"},
     #     )
-    if database_service.get_session(session_id="1") is None:
+    clerk_user_id = request.headers.get("x-clerk-user-id")
+    clerk_email = request.headers.get("x-clerk-user-email")
+
+    # Prefer stable per-user thread IDs when available (keeps LangGraph memory/checkpoints per user).
+    if clerk_user_id:
+        user = await database_service.get_user_by_clerk_id(clerk_user_id)
+        if user is None:
+            # Create a placeholder user record if backend hasn't seen this Clerk user yet.
+            # Email is required + unique; fall back to a deterministic placeholder.
+            email = clerk_email or f"{clerk_user_id}@clerk.local"
+            user = await database_service.create_user_from_clerk(clerk_id=clerk_user_id, email=email)
+
+        if await database_service.get_session(session_id=clerk_user_id) is None:
+            await database_service.create_session(session_id=clerk_user_id, user_id=user.id)
+
+        return Session(id=clerk_user_id, user_id=user.id)
+
+    # Fallback behavior for local/dev without Clerk headers.
+    if await database_service.get_session(session_id="1") is None:
         await database_service.create_session(session_id="1", user_id=1)
     return Session(id="1", user_id=1)
 
