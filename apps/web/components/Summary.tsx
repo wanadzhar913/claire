@@ -120,7 +120,7 @@ export function Summary({
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const isProcessing = React.useMemo(() => {
+  const isProcessing = React.useCallback(() => {
     if (!scope || filesLoading) return false;
     if (scope.type !== "statement") return false;
     const file = files.find((f) => f.file_id === scope.fileId);
@@ -173,15 +173,17 @@ export function Summary({
     }
   }, [isLoaded, isSignedIn, fetchInsights]);
 
+  const processing = isProcessing();
+
   React.useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
 
     const wasProcessing = wasProcessingRef.current;
-    if (wasProcessing === true && !isProcessing) {
+    if (wasProcessing === true && !processing) {
       fetchInsights();
     }
-    wasProcessingRef.current = isProcessing;
-  }, [isProcessing, isLoaded, isSignedIn, fetchInsights]);
+    wasProcessingRef.current = processing;
+  }, [processing, isLoaded, isSignedIn, fetchInsights]);
 
   // Loading state
   if (loading) {
@@ -284,10 +286,9 @@ export function Summary({
       </CardHeader>
 
       <CardContent className="space-y-5 pt-2">
-        {isProcessing && (
-          <div className="flex items-center gap-2 rounded-md border border-amber-200/50 bg-amber-50/50 px-3 py-2 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
+        {processing && (
+          <div className="flex items-center justify-center px-3 py-2">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            <span>Processing statement… insights will appear shortly.</span>
           </div>
         )}
         {/* Empty state */}
