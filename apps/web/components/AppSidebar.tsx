@@ -96,9 +96,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border p-2">
-        <ThemeToggle className="w-full justify-start" variant="ghost" size="default" />
-      </SidebarFooter>
     </Sidebar>
   )
 }
