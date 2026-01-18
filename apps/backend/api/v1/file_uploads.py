@@ -201,6 +201,7 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
+@router.get("", tags=["File Uploads"])
 @router.get("/", tags=["File Uploads"])
 async def list_user_uploads(
     current_user: User = Depends(get_current_user),
