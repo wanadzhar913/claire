@@ -24,7 +24,10 @@ class Message(BaseModel):
     model_config = {"extra": "ignore"}
 
     role: Literal["user", "assistant", "system"] = Field(..., description="The role of the message sender")
-    content: str = Field(..., description="The content of the message", min_length=1, max_length=3000)
+    # NOTE: This schema is used for both user/assistant messages *and* our internal system prompt
+    # (see backend.utils.graph.prepare_messages). The system prompt can exceed 3k characters once
+    # long-term memory is injected, so keep this comfortably high to avoid 502s during chat.
+    content: str = Field(..., description="The content of the message", min_length=1, max_length=5000)
 
     @field_validator("content")
     @classmethod

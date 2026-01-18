@@ -8,11 +8,13 @@ and financial transaction queries.
 from langchain_core.tools.base import BaseTool
 
 from .duckduckgo_search import duckduckgo_search_tool
+from .query_goals import query_goals_tool
 from .query_subscriptions import query_subscriptions_tool
 from .query_sankey import query_sankey_tool
 
 tools: list[BaseTool] = [
     duckduckgo_search_tool,
+    query_goals_tool,
     query_subscriptions_tool,
     query_sankey_tool,
 ]

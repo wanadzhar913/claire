@@ -44,11 +44,8 @@ export interface UserFilesResponse {
 
 // Date range presets
 export type RangePreset =
-  | "last_30_days"
-  | "last_90_days"
   | "this_month"
   | "last_3_months"
-  | "ytd"
   | "custom";
 
 export interface RangePresetOption {
@@ -98,32 +95,6 @@ export function getRangePresets(): RangePresetOption[] {
 
   return [
     {
-      id: "last_30_days",
-      label: "Last 30 days",
-      getRange: () => {
-        const endDate = new Date(today);
-        const startDate = new Date(today);
-        startDate.setDate(startDate.getDate() - 30);
-        return {
-          startDate: formatDateToISO(startDate),
-          endDate: formatDateToISO(endDate),
-        };
-      },
-    },
-    {
-      id: "last_90_days",
-      label: "Last 90 days",
-      getRange: () => {
-        const endDate = new Date(today);
-        const startDate = new Date(today);
-        startDate.setDate(startDate.getDate() - 90);
-        return {
-          startDate: formatDateToISO(startDate),
-          endDate: formatDateToISO(endDate),
-        };
-      },
-    },
-    {
       id: "this_month",
       label: "This month",
       getRange: () => {
@@ -142,18 +113,6 @@ export function getRangePresets(): RangePresetOption[] {
         const endDate = new Date(today);
         const startDate = new Date(today);
         startDate.setMonth(startDate.getMonth() - 3);
-        return {
-          startDate: formatDateToISO(startDate),
-          endDate: formatDateToISO(endDate),
-        };
-      },
-    },
-    {
-      id: "ytd",
-      label: "Year to date",
-      getRange: () => {
-        const startDate = new Date(today.getFullYear(), 0, 1);
-        const endDate = new Date(today);
         return {
           startDate: formatDateToISO(startDate),
           endDate: formatDateToISO(endDate),

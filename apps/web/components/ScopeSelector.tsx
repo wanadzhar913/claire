@@ -47,7 +47,7 @@ export function ScopeSelector({ className }: ScopeSelectorProps) {
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const [selectedPreset, setSelectedPreset] =
-    useState<RangePreset>("last_30_days");
+    useState<RangePreset>("this_month");
 
   // Get presets
   const presets = useMemo(() => getRangePresets(), []);

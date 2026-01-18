@@ -240,30 +240,6 @@ export function Summary({ onClose, onViewDetails, className, scope }: SummaryPro
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold">Financial Summary</CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              title="Refresh insights"
-            >
-              {refreshing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-            </Button>
-            {onClose && (
-              <button 
-                onClick={onClose}
-                className="p-1.5 rounded-full hover:bg-muted transition-colors"
-              >
-                <X className="w-5 h-5 text-muted-foreground" />
-              </button>
-            )}
-          </div>
         </div>
       </CardHeader>
 
