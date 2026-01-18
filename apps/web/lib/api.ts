@@ -31,7 +31,13 @@ export function createAuthenticatedFetch(getToken: () => Promise<string | null>)
  */
 export function getApiUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (envUrl) return envUrl;
+  if (envUrl) {
+    // Safety check: Force HTTPS for railway.app production URLs
+    if (envUrl.includes('railway.app') && envUrl.startsWith('http://')) {
+      return envUrl.replace('http://', 'https://');
+    }
+    return envUrl;
+  }
 
   if (process.env.NODE_ENV === 'development') return 'http://localhost:8000';
 
