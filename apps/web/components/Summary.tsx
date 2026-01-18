@@ -127,6 +127,8 @@ export function Summary({
     return file?.status === "processing";
   }, [scope, files, filesLoading]);
 
+  const wasProcessingRef = React.useRef<boolean | null>(null);
+
   // Fetch insights on mount or when scope changes
   const fetchInsights = React.useCallback(async () => {
     if (!isSignedIn) return;
@@ -170,6 +172,16 @@ export function Summary({
       setLoading(false);
     }
   }, [isLoaded, isSignedIn, fetchInsights]);
+
+  React.useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+
+    const wasProcessing = wasProcessingRef.current;
+    if (wasProcessing === true && !isProcessing) {
+      fetchInsights();
+    }
+    wasProcessingRef.current = isProcessing;
+  }, [isProcessing, isLoaded, isSignedIn, fetchInsights]);
 
   // Loading state
   if (loading) {
