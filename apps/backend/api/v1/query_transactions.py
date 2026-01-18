@@ -2,12 +2,14 @@
 import asyncio
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 import pandas as pd
 
+from backend.core.auth import get_current_user
+from backend.models.user import User
 from backend.utils.sankey import to_sankey
 from backend.services.db.postgres_connector import database_service
 from backend.schemas.transaction_response import BankingTransactionResponse
@@ -17,7 +19,7 @@ router = APIRouter()
 
 @router.get("/transactions", response_model=List[BankingTransactionResponse])
 async def query_transactions_all(
-    user_id: Optional[int] = Query(default=1, description="Filter by user ID"),
+    current_user: User = Depends(get_current_user),
     file_id: Optional[str] = Query(default=None, description="Filter by file ID (user upload file ID)"),
     start_date: Optional[date] = Query(default=None, description="Filter transactions from this date onwards (inclusive)"),
     end_date: Optional[date] = Query(default=None, description="Filter transactions up to this date (inclusive)"),
@@ -39,7 +41,7 @@ async def query_transactions_all(
     """Query banking transactions with various filters.
     
     This endpoint allows filtering banking transactions by multiple criteria including:
-    - User and file filters
+    - File filters
     - Date ranges
     - Amount ranges
     - Transaction type, category, merchant name
@@ -47,24 +49,23 @@ async def query_transactions_all(
     - Currency and description search
     
     Args:
-    - `user_id`: Filter by user ID
-    - `file_id`: Filter by file ID (user upload file ID)
-    - `start_date`: Filter transactions from this date onwards (inclusive)
-    - `end_date`: Filter transactions up to this date (inclusive)
-    - `merchant_name`: Filter by merchant name (partial match, case-insensitive)
-    - `transaction_type`: Filter by transaction type ('debit' or 'credit')
-    - `category`: Filter by transaction category
-    - `min_amount`: Minimum transaction amount (inclusive)
-    - `max_amount`: Maximum transaction amount (inclusive)
-    - `is_subscription`: Filter by subscription status (likely to recur monthly)
-    - `transaction_year`: Filter by transaction year
-    - `transaction_month`: Filter by transaction month (1-12)
-    - `currency`: Filter by currency code (e.g., 'MYR')
-    - `description`: Filter by description (partial match, case-insensitive)
-    - `limit`: Maximum number of results to return
-    - `offset`: Number of results to skip (for pagination)
-    - `order_by`: Field to order by (default: 'transaction_date')
-    - `order_desc`: If True, order descending; if False, order ascending
+        current_user: Authenticated user (from Clerk JWT)
+        file_id: Filter by file ID (user upload file ID)
+        start_date: Filter transactions from this date onwards (inclusive)
+        end_date: Filter transactions up to this date (inclusive)
+        merchant_name: Filter by merchant name (partial match, case-insensitive)
+        transaction_type: Filter by transaction type ('debit' or 'credit')
+        category: Filter by transaction category
+        min_amount: Minimum transaction amount (inclusive)
+        max_amount: Maximum transaction amount (inclusive)
+        transaction_year: Filter by transaction year
+        transaction_month: Filter by transaction month (1-12)
+        currency: Filter by currency code (e.g., 'MYR')
+        description: Filter by description (partial match, case-insensitive)
+        limit: Maximum number of results to return
+        offset: Number of results to skip (for pagination)
+        order_by: Field to order by (default: 'transaction_date')
+        order_desc: If True, order descending; if False, order ascending
         
     Returns:
     - `List[BankingTransactionResponse]`: List of matching banking transactions
@@ -72,6 +73,7 @@ async def query_transactions_all(
     Raises:
     - `HTTPException`: If query fails
     """
+    user_id = current_user.id
     try:
         transactions = database_service.filter_banking_transactions(
             user_id=user_id,
@@ -126,7 +128,7 @@ async def query_transactions_all(
 
 @router.get("/transactions/sankey_diagram")
 async def query_transactions_sankey_diagram(
-    user_id: Optional[int] = Query(default=1, description="Filter by user ID"),
+    current_user: User = Depends(get_current_user),
     file_id: Optional[str] = Query(default=None, description="Filter by file ID (user upload file ID)"),
     start_date: Optional[date] = Query(default=None, description="Filter transactions from this date onwards (inclusive)"),
     end_date: Optional[date] = Query(default=None, description="Filter transactions up to this date (inclusive)"),
@@ -156,24 +158,22 @@ async def query_transactions_sankey_diagram(
     - Currency and description search
     
     Args:
-    - `user_id`: Filter by user ID
-    - `file_id`: Filter by file ID (user upload file ID)
-    - `start_date`: Filter transactions from this date onwards (inclusive)
-    - `end_date`: Filter transactions up to this date (inclusive)
-    - `merchant_name`: Filter by merchant name (partial match, case-insensitive)
-    - `transaction_type`: Filter by transaction type ('debit' or 'credit')
-    - `category`: Filter by transaction category
-    - `min_amount`: Minimum transaction amount (inclusive)
-    - `max_amount`: Maximum transaction amount (inclusive)
-    - `is_subscription`: Filter by subscription status (likely to recur monthly)
-    - `transaction_year`: Filter by transaction year
-    - `transaction_month`: Filter by transaction month (1-12)
-    - `currency`: Filter by currency code (e.g., 'MYR')
-    - `description`: Filter by description (partial match, case-insensitive)
-    - `limit`: Maximum number of results to return
-    - `offset`: Number of results to skip (for pagination)
-    - `order_by`: Field to order by (default: 'transaction_date')
-    - `order_desc`: If True, order descending; if False, order ascending
+        current_user: Authenticated user (from Clerk JWT)
+        file_id: Filter by file ID (user upload file ID)
+        start_date: Filter transactions from this date onwards (inclusive)
+        end_date: Filter transactions up to this date (inclusive)
+        merchant_name: Filter by merchant name (partial match, case-insensitive)
+        transaction_type: Filter by transaction type ('debit' or 'credit')
+        min_amount: Minimum transaction amount (inclusive)
+        max_amount: Maximum transaction amount (inclusive)
+        transaction_year: Filter by transaction year
+        transaction_month: Filter by transaction month (1-12)
+        currency: Filter by currency code (e.g., 'MYR')
+        description: Filter by description (partial match, case-insensitive)
+        limit: Maximum number of results to return
+        offset: Number of results to skip (for pagination)
+        order_by: Field to order by (default: 'transaction_date')
+        order_desc: If True, order descending; if False, order ascending
         
     Returns:
     - `List[Dict[str, Any]]`: List of matching banking transactions converted to a dictionary format for sankey diagram
@@ -181,6 +181,7 @@ async def query_transactions_sankey_diagram(
     Raises:
     - `HTTPException`: If query fails
     """
+    user_id = current_user.id
     try:
         transactions = database_service.filter_banking_transactions(
             user_id=user_id,
@@ -224,7 +225,7 @@ async def query_transactions_sankey_diagram(
 
 @router.get("/transactions/subscriptions", response_model=List[BankingTransactionResponse])
 async def query_subscriptions_all(
-    user_id: Optional[int] = Query(default=1, description="Filter by user ID"),
+    current_user: User = Depends(get_current_user),
     transaction_year: Optional[int] = Query(default=None, description="Filter by transaction year"),
     limit: Optional[int] = Query(default=None, ge=1, le=1000, description="Maximum number of results to return"),
     offset: int = Query(default=0, ge=0, description="Number of results to skip (for pagination)"),
@@ -237,7 +238,7 @@ async def query_subscriptions_all(
     All other filter parameters work the same as the general transactions endpoint.
     
     Args:
-    - `user_id`: Filter by user ID
+    - `current_user`: Authenticated user (from Clerk JWT)
     - `transaction_year`: Filter by transaction year
     - `limit`: Maximum number of results to return
     - `offset`: Number of results to skip (for pagination)
@@ -250,6 +251,7 @@ async def query_subscriptions_all(
     Raises:
     - `HTTPException`: If query fails
     """
+    user_id = current_user.id
     try:
         transactions = database_service.filter_banking_transactions(
             user_id=user_id,
@@ -294,7 +296,7 @@ async def query_subscriptions_all(
 
 @router.get("/transactions/subscriptions/aggregated")
 async def query_subscriptions_aggregated(
-    user_id: Optional[int] = Query(default=1, description="Filter by user ID"),
+    current_user: User = Depends(get_current_user),
     transaction_year: Optional[int] = Query(default=None, description="Filter by transaction year"),
     limit: Optional[int] = Query(default=None, ge=1, le=1000, description="Maximum number of results to return"),
     offset: int = Query(default=0, ge=0, description="Number of results to skip (for pagination)"),
@@ -307,7 +309,7 @@ async def query_subscriptions_aggregated(
     All other filter parameters work the same as the general transactions endpoint.
     
     Args:
-    - `user_id`: Filter by user ID
+    - `current_user`: Authenticated user (from Clerk JWT)
     - `transaction_year`: Filter by transaction year
     - `limit`: Maximum number of results to return
     - `offset`: Number of results to skip (for pagination)
@@ -320,6 +322,7 @@ async def query_subscriptions_aggregated(
     Raises:
         HTTPException: If query fails
     """
+    user_id = current_user.id
     try:
         transactions = database_service.filter_banking_transactions(
             user_id=user_id,

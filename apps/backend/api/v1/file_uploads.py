@@ -12,50 +12,40 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
 
+from backend.core.auth import get_current_user
+from backend.models.user import User
 from backend.models.user_upload import UserUpload
 from backend.models.banking_transaction import BankingTransaction
 from backend.services.db.postgres_connector import database_service
 from backend.services.object_store.minio_connector import get_minio_connector
 from backend.services.document_parser.financial_text_extractor import extract_banking_transactions
+from backend.services.ai_agent.transaction_analyzer import transaction_analyzer
 
 router = APIRouter()
 minio_connector = get_minio_connector()
 
 
-# TODO: Implement proper authentication dependency
-# For now, using a simple user_id query parameter
-# In production, this should be extracted from JWT token or session
-async def get_current_user_id(user_email: str = Query(...)) -> int:
-    """Get current user ID from request.
-    
-    TODO: Replace with proper authentication middleware.
-    """
-    user = await database_service.get_user_by_email(user_email)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user.id
-
-
 @router.post("/upload", tags=["File Uploads"])
 async def upload_file(
     file: UploadFile = File(...),
-    user_id: int = Query(...),
-    statement_type: str = Query(default="banking_transaction", pattern="^(banking_transaction|receipt|invoice|other)$"),
+    current_user: User = Depends(get_current_user),
+    statement_type: str = Query(default="banking_transaction", regex="^(banking_transaction|receipt|invoice|other)$"),
     expense_month: Optional[int] = Query(default=None, ge=1, le=12),
     expense_year: Optional[int] = Query(default=None),
 ) -> dict:
     """Upload a file and process it to extract banking transactions.
     
     Args:
-    - `file`: The file to upload
-    - `user_id`: User ID (from authentication)
-    - `statement_type`: Type of statement (banking_transaction, receipt, invoice, other)
-    - `expense_month`: Month of the expense (1-12), defaults to current month
-    - `expense_year`: Year of the expense, defaults to current year
+        file: The file to upload
+        current_user: Authenticated user (from Clerk JWT)
+        statement_type: Type of statement (banking_transaction, receipt, invoice, other)
+        expense_month: Month of the expense (1-12), defaults to current month
+        expense_year: Year of the expense, defaults to current year
         
     Returns:
     - Dictionary with upload details and extracted transaction count
     """
+    user_id = current_user.id
     try:
         # Read file content
         file_content = await file.read()
@@ -150,6 +140,17 @@ async def upload_file(
                     database_service.create_banking_transactions_bulk(banking_transactions)
                     transaction_count = len(banking_transactions)
                     
+                    # Trigger AI analysis after successful extraction
+                    try:
+                        transaction_analyzer.analyze(
+                            user_id=user_id,
+                            file_id=file_id,
+                            transactions=banking_transactions,
+                        )
+                    except Exception as analysis_error:
+                        # Log error but don't fail the upload
+                        print(f"Error running AI analysis: {str(analysis_error)}")
+                    
             except Exception as e:
                 # Log error but don't fail the upload
                 # In production, you might want to log this properly
@@ -162,6 +163,7 @@ async def upload_file(
             "file_url": upload_result.get("file_url", ""),
             "statement_type": statement_type,
             "transactions_extracted": transaction_count,
+            "insights_generated": transaction_count > 0,
             "message": "File uploaded and processed successfully"
         }
         
@@ -173,7 +175,7 @@ async def upload_file(
 
 @router.get("/", tags=["File Uploads"])
 async def list_user_uploads(
-    user_id: int = Query(...),
+    current_user: User = Depends(get_current_user),
     limit: Optional[int] = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     order_by: str = Query(default="created_at"),
@@ -182,15 +184,16 @@ async def list_user_uploads(
     """List all user uploads with pagination.
     
     Args:
-    - `user_id`: User ID (from authentication)
-    - `limit`: Maximum number of results (1-100)
-    - `offset`: Number of results to skip
-    - `order_by`: Field to order by
-    - `order_desc`: Order descending if True, ascending if False
+        current_user: Authenticated user (from Clerk JWT)
+        limit: Maximum number of results (1-100)
+        offset: Number of results to skip
+        order_by: Field to order by
+        order_desc: Order descending if True, ascending if False
         
     Returns:
     - Dictionary with uploads list and pagination info
     """
+    user_id = current_user.id
     uploads = database_service.get_user_uploads(
         user_id=user_id,
         limit=limit,
@@ -223,17 +226,18 @@ async def list_user_uploads(
 @router.get("/{file_id}/download", tags=["File Uploads"])
 async def download_user_upload(
     file_id: str,
-    user_id: int = Query(...),
+    current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
     """Download a user upload file.
     
     Args:
-    - `file_id`: File ID to download
-    - `user_id`: User ID (from authentication)
+        file_id: File ID to download
+        current_user: Authenticated user (from Clerk JWT)
         
     Returns:
     - StreamingResponse with file content
     """
+    user_id = current_user.id
     # Get user upload to verify ownership
     uploads = database_service.get_user_uploads(user_id=user_id)
     upload = next((u for u in uploads if u.file_id == file_id), None)

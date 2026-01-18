@@ -35,6 +35,9 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
       - LOG_LEVEL=${LOG_LEVEL}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
+      - CLERK_JWKS_URL=${CLERK_JWKS_URL}
     depends_on:
       - db
       - minio
@@ -82,7 +85,12 @@ services:
     image: minio/mc:RELEASE.2025-07-16T15-35-03Z-cpuv1
     depends_on:
       - minio
-    entrypoint: ["/bin/sh", "/create-bucket.sh"]
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "tr -d '\\r' < /create-bucket.sh > /tmp/script.sh && /bin/sh /tmp/script.sh",
+      ]
     volumes:
       - ./scripts/create-bucket.sh:/create-bucket.sh
     environment:
@@ -94,7 +102,6 @@ services:
     restart: on-failure
     networks:
       - claire
-
 
 networks:
   claire:

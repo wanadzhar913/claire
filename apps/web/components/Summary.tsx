@@ -7,8 +7,25 @@ import {
   Utensils, 
   ArrowRightLeft, 
   TrendingUp,
+  TrendingDown,
   AlertTriangle,
-  Lightbulb
+  Lightbulb,
+  ShoppingCart,
+  Car,
+  Home,
+  Gamepad,
+  Heart,
+  GraduationCap,
+  Zap,
+  CreditCard,
+  Repeat,
+  Calendar,
+  PiggyBank,
+  Target,
+  Shield,
+  Wallet,
+  RefreshCw,
+  Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -17,42 +34,55 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardFooter
 } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useApi } from "@/hooks/use-api"
 
-// Mock data representing AI-parsed bank statement insights
-const mockData = {
-  insights: [
-    { 
-      id: "coffee", 
-      icon: "Coffee", 
-      title: "Morning Coffee Habit",
-      description: "You spend ~$4.50 on coffee around 8am on weekdays"
-    },
-    { 
-      id: "dining", 
-      icon: "Utensils", 
-      title: "Weekend Dining",
-      description: "Restaurant spending peaks on Saturdays, averaging $45"
-    },
-    { 
-      id: "transfers", 
-      icon: "ArrowRightLeft", 
-      title: "Savings Pattern",
-      description: "You transfer $500 to savings on the 1st of each month"
-    },
-  ],
-  alerts: [
-    { id: "unusual", message: "Unusual spending detected last Tuesday", severity: "warning" },
-    { id: "budget", message: "Dining budget exceeded by 23%", severity: "warning" },
-  ]
-}
-
+// Icon mapping for dynamic icon rendering
 const iconMap: Record<string, React.ElementType> = {
   Coffee,
   Utensils,
   ArrowRightLeft,
   TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Lightbulb,
+  ShoppingCart,
+  Car,
+  Home,
+  Gamepad,
+  Heart,
+  GraduationCap,
+  Zap,
+  CreditCard,
+  Repeat,
+  Calendar,
+  PiggyBank,
+  Target,
+  Shield,
+  Wallet,
+}
+
+// Types for API response
+interface Insight {
+  id: string
+  user_id: number
+  file_id: string | null
+  insight_type: "pattern" | "alert" | "recommendation"
+  title: string
+  description: string
+  icon: string
+  severity: "info" | "warning" | "critical" | null
+  metadata: Record<string, unknown> | null
+  created_at: string | null
+}
+
+interface InsightsResponse {
+  insights: Insight[]
+  patterns: Insight[]
+  alerts: Insight[]
+  recommendations: Insight[]
+  count: number
 }
 
 interface SummaryProps {
@@ -62,71 +92,268 @@ interface SummaryProps {
 }
 
 export function Summary({ onClose, onViewDetails, className }: SummaryProps) {
+  const { get, post, isSignedIn, isLoaded } = useApi()
+  const [data, setData] = React.useState<InsightsResponse | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [refreshing, setRefreshing] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  // Fetch insights on mount
+  const fetchInsights = React.useCallback(async () => {
+    if (!isSignedIn) return
+    
+    try {
+      setError(null)
+      const response = await get<InsightsResponse>("/api/v1/insights")
+      setData(response)
+    } catch (err) {
+      console.error("Failed to fetch insights:", err)
+      setError("Failed to load insights")
+    } finally {
+      setLoading(false)
+    }
+  }, [get, isSignedIn])
+
+  // Trigger new analysis
+  const handleRefresh = async () => {
+    if (!isSignedIn || refreshing) return
+    
+    setRefreshing(true)
+    try {
+      await post("/api/v1/insights/analyze", {})
+      await fetchInsights()
+    } catch (err) {
+      console.error("Failed to analyze transactions:", err)
+      setError("Failed to analyze transactions")
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  React.useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      fetchInsights()
+    } else if (isLoaded && !isSignedIn) {
+      setLoading(false)
+    }
+  }, [isLoaded, isSignedIn, fetchInsights])
+
+  // Loading state
+  if (loading) {
+    return (
+      <Card className={cn("w-full border shadow-lg bg-background", className)}>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg font-semibold">Financial Summary</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5 pt-2">
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Not signed in state
+  if (!isSignedIn) {
+    return (
+      <Card className={cn("w-full border shadow-lg bg-background", className)}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg font-semibold">Financial Summary</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Sign in to view your financial insights.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Error state
+  if (error && !data) {
+    return (
+      <Card className={cn("w-full border shadow-lg bg-background", className)}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg font-semibold">Financial Summary</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-destructive">{error}</p>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-3"
+            onClick={fetchInsights}
+          >
+            Try Again
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const patterns = data?.patterns || []
+  const alerts = data?.alerts || []
+  const recommendations = data?.recommendations || []
+  const hasNoData = patterns.length === 0 && alerts.length === 0 && recommendations.length === 0
+
   return (
     <Card className={cn("w-full border shadow-lg bg-background", className)}>
       {/* Header */}
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold">Financial Summary</CardTitle>
-          {onClose && (
-            <button 
-              onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-muted transition-colors"
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="Refresh insights"
             >
-              <X className="w-5 h-5 text-muted-foreground" />
-            </button>
-          )}
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
+            {onClose && (
+              <button 
+                onClick={onClose}
+                className="p-1.5 rounded-full hover:bg-muted transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            )}
+          </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-5 pt-2">
-        {/* Spending Patterns */}
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <Lightbulb className="w-4 h-4 text-amber-500" />
-            <h3 className="text-sm font-medium">Spending Insights</h3>
+        {/* Empty state */}
+        {hasNoData && (
+          <div className="text-center py-6">
+            <Lightbulb className="w-10 h-10 mx-auto text-muted-foreground/50 mb-3" />
+            <p className="text-sm text-muted-foreground">
+              No insights yet. Upload a bank statement to get started.
+            </p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-4"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                "Analyze Transactions"
+              )}
+            </Button>
           </div>
-          <div className="space-y-3">
-            {mockData.insights.map((insight) => {
-              const IconComponent = iconMap[insight.icon]
-              return (
-                <div
-                  key={insight.id}
-                  className="flex items-start gap-3 p-3 rounded-lg bg-muted/50"
-                >
-                  {IconComponent && (
+        )}
+
+        {/* Spending Patterns */}
+        {patterns.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-medium">Spending Insights</h3>
+            </div>
+            <div className="space-y-3">
+              {patterns.map((insight) => {
+                const IconComponent = iconMap[insight.icon] || Lightbulb
+                return (
+                  <div
+                    key={insight.id}
+                    className="flex items-start gap-3 p-3 rounded-lg bg-muted/50"
+                  >
                     <div className="p-2 rounded-lg bg-background shrink-0">
                       <IconComponent className="w-4 h-4 text-muted-foreground" />
                     </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{insight.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{insight.description}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{insight.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{insight.description}</p>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
+                )
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Alerts */}
-        <section>
-          <h3 className="text-sm font-medium mb-3">Alerts</h3>
-          <div className="space-y-2">
-            {mockData.alerts.map((alert) => (
-              <div 
-                key={alert.id}
-                className="flex items-center gap-2 text-sm"
-              >
-                <AlertTriangle className={cn(
-                  "w-4 h-4 shrink-0",
-                  alert.severity === "warning" ? "text-amber-500" : "text-blue-500"
-                )} />
-                <span className="text-muted-foreground">{alert.message}</span>
-              </div>
-            ))}
-          </div>
-        </section>
+        {alerts.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-medium">Alerts</h3>
+            </div>
+            <div className="space-y-2">
+              {alerts.map((alert) => {
+                const IconComponent = iconMap[alert.icon] || AlertTriangle
+                return (
+                  <div 
+                    key={alert.id}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <IconComponent className={cn(
+                      "w-4 h-4 shrink-0",
+                      alert.severity === "critical" ? "text-destructive" :
+                      alert.severity === "warning" ? "text-amber-500" : "text-blue-500"
+                    )} />
+                    <div className="min-w-0">
+                      <span className="font-medium">{alert.title}: </span>
+                      <span className="text-muted-foreground">{alert.description}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Recommendations */}
+        {recommendations.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Target className="w-4 h-4 text-emerald-500" />
+              <h3 className="text-sm font-medium">Recommendations</h3>
+            </div>
+            <div className="space-y-3">
+              {recommendations.map((rec) => {
+                const IconComponent = iconMap[rec.icon] || Lightbulb
+                return (
+                  <div
+                    key={rec.id}
+                    className="flex items-start gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20"
+                  >
+                    <div className="p-2 rounded-lg bg-emerald-500/20 shrink-0">
+                      <IconComponent className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{rec.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{rec.description}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
       </CardContent>
     </Card>
   )
