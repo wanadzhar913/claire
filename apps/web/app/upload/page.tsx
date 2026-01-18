@@ -8,10 +8,10 @@ import { getApiUrl } from "@/lib/api"
 export default function UploadPage() {
   const router = useRouter()
   const [phase, setPhase] = React.useState<"idle" | "processing">("idle")
-  const [fileName, setFileName] = React.useState("")
+  const [fileNames, setFileNames] = React.useState<string[]>([])
 
-  const handleSuccess = (name: string) => {
-    setFileName(name)
+  const handleSuccess = (names: string[]) => {
+    setFileNames(names)
     setPhase("processing")
     setTimeout(() => {
       router.push("/dashboard")
@@ -39,8 +39,12 @@ export default function UploadPage() {
               <p className="text-muted-foreground">
                 Upload received. Processing statement:
               </p>
-              <div className="mt-4 inline-block px-4 py-1.5 rounded-full bg-muted border font-mono text-sm text-foreground">
-                {fileName}
+              <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                {fileNames.map((name) => (
+                  <div key={name} className="px-4 py-1.5 rounded-full bg-muted border font-mono text-sm text-foreground">
+                    {name}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
