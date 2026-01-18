@@ -715,6 +715,41 @@ class DatabaseService:
             session.commit()
             return count
 
+    def delete_user_ai_insights(
+        self,
+        user_id: int,
+        file_id: Optional[str] = None,
+    ) -> int:
+        """Delete AI-generated insights (metadata.source == 'ai_analysis') for a user.
+
+        This is used to make analysis runs reproducible: re-running analysis should
+        replace prior AI insights rather than accumulating duplicates.
+
+        Args:
+            user_id: The user ID to delete insights for
+            file_id: Optional filter to only delete insights for a specific file
+
+        Returns:
+            int: Number of deleted insights
+        """
+        with Session(self.engine) as session:
+            statement = select(FinancialInsight).where(FinancialInsight.user_id == user_id)
+            if file_id is not None:
+                statement = statement.where(FinancialInsight.file_id == file_id)
+
+            insights = session.exec(statement).all()
+            to_delete = []
+            for insight in insights:
+                meta = getattr(insight, "insight_metadata", None) or {}
+                if meta.get("source") == "ai_analysis":
+                    to_delete.append(insight)
+
+            for insight in to_delete:
+                session.delete(insight)
+
+            session.commit()
+            return len(to_delete)
+
     # Subscription classification methods
     def get_subscription_candidates(
         self,

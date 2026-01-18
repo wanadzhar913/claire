@@ -224,7 +224,15 @@ export function Summary({ onClose, onViewDetails, className, scope }: SummaryPro
   const patterns = data?.patterns || []
   const alerts = data?.alerts || []
   const recommendations = data?.recommendations || []
-  const hasNoData = patterns.length === 0 && alerts.length === 0 && recommendations.length === 0
+
+  // UI caps (keep dashboard summary scannable regardless of backend volume)
+  const cappedPatterns = patterns.slice(0, 3)
+  const cappedAlerts = alerts.slice(0, 1)
+  const cappedRecommendations = recommendations.slice(0, 1)
+  const hasNoData =
+    cappedPatterns.length === 0 &&
+    cappedAlerts.length === 0 &&
+    cappedRecommendations.length === 0
 
   return (
     <Card className={cn("w-full border shadow-lg bg-background", className)}>
@@ -287,14 +295,14 @@ export function Summary({ onClose, onViewDetails, className, scope }: SummaryPro
         )}
 
         {/* Spending Patterns */}
-        {patterns.length > 0 && (
+        {cappedPatterns.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Lightbulb className="w-4 h-4 text-amber-500" />
               <h3 className="text-sm font-medium">Spending Insights</h3>
             </div>
             <div className="space-y-3">
-              {patterns.map((insight) => {
+              {cappedPatterns.map((insight) => {
                 const IconComponent = iconMap[insight.icon] || Lightbulb
                 return (
                   <div
@@ -316,14 +324,10 @@ export function Summary({ onClose, onViewDetails, className, scope }: SummaryPro
         )}
 
         {/* Alerts */}
-        {alerts.length > 0 && (
+        {cappedAlerts.length > 0 && (
           <section>
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              <h3 className="text-sm font-medium">Alerts</h3>
-            </div>
             <div className="space-y-2">
-              {alerts.map((alert) => {
+              {cappedAlerts.map((alert) => {
                 const IconComponent = iconMap[alert.icon] || AlertTriangle
                 return (
                   <div 
@@ -347,14 +351,14 @@ export function Summary({ onClose, onViewDetails, className, scope }: SummaryPro
         )}
 
         {/* Recommendations */}
-        {recommendations.length > 0 && (
+        {cappedRecommendations.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Target className="w-4 h-4 text-emerald-500" />
               <h3 className="text-sm font-medium">Recommendations</h3>
             </div>
             <div className="space-y-3">
-              {recommendations.map((rec) => {
+              {cappedRecommendations.map((rec) => {
                 const IconComponent = iconMap[rec.icon] || Lightbulb
                 return (
                   <div

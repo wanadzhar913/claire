@@ -219,17 +219,6 @@ export function UploadForm({ apiUrl, onSuccess }: UploadFormProps) {
     setError(null);
 
     try {
-      const token = await getToken();
-      const formData = new FormData();
-      for (const file of files) {
-        formData.append("files", file);
-      }
-
-      const headers: HeadersInit = {};
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
       // Backend expects a single month/year per upload (matches DB schema).
       // We upload each PDF individually and tag it with the correct month/year.
       const assigned = getAssignedMonthsForFiles(
@@ -241,6 +230,12 @@ export function UploadForm({ apiUrl, onSuccess }: UploadFormProps) {
 
       const uploadedNames: string[] = [];
       for (let i = 0; i < filesOrderedOldestToNewest.length; i++) {
+        const token = await getToken();
+        const headers: HeadersInit = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
         const f = filesOrderedOldestToNewest[i];
         const tag = assigned[i];
 

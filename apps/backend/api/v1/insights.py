@@ -57,8 +57,8 @@ async def get_insights(
         description="Filter by insight type"
     ),
     file_id: Optional[str] = Query(default=None, description="Filter by file ID"),
-    start_date: Optional[date] = Query(default=None, description="Filter insights from this date onwards (based on associated transactions)"),
-    end_date: Optional[date] = Query(default=None, description="Filter insights up to this date (based on associated transactions)"),
+    start_date: Optional[date] = Query(default=None, description="Filter insights for this transaction date range (inclusive)"),
+    end_date: Optional[date] = Query(default=None, description="Filter insights for this transaction date range (inclusive)"),
     limit: Optional[int] = Query(default=50, ge=1, le=100, description="Maximum results"),
     offset: int = Query(default=0, ge=0, description="Results to skip"),
 ) -> InsightsListResponse:
@@ -81,17 +81,41 @@ async def get_insights(
     user_id = current_user.id
     
     try:
-        # Note: start_date and end_date filtering would require joining with transactions
-        # For now, we filter by file_id if provided, or return all insights
-        # TODO: Implement date range filtering for insights based on associated transaction dates
+        if (start_date is None) != (end_date is None):
+            raise HTTPException(
+                status_code=400,
+                detail="Both start_date and end_date must be provided together, or neither",
+            )
+        if start_date and end_date and end_date < start_date:
+            raise HTTPException(status_code=400, detail="end_date must be >= start_date")
+
+        fetch_limit = 200 if (start_date and end_date) and limit is not None else limit
+        fetch_offset = 0 if (start_date and end_date) else offset
         insights = database_service.get_user_insights(
             user_id=user_id,
             insight_type=insight_type,
             file_id=file_id,
-            limit=limit,
-            offset=offset,
+            limit=fetch_limit,
+            offset=fetch_offset,
             order_desc=True,
         )
+
+        if start_date and end_date:
+            req_start = start_date.isoformat()
+            req_end = end_date.isoformat()
+
+            def _overlaps(i: object) -> bool:
+                meta = getattr(i, "insight_metadata", None) or {}
+                tr = meta.get("time_range") or meta.get("observed_time_range") or {}
+                s = tr.get("start")
+                e = tr.get("end")
+                if not s or not e:
+                    return False
+                # overlap inclusive: not (e < req_start or s > req_end)
+                return not (e < req_start or s > req_end)
+
+            insights = [i for i in insights if _overlaps(i)]
+            insights = insights[offset: offset + (limit or 50)]
         
         # Convert to response models and group by type
         all_insights = []
@@ -140,6 +164,8 @@ async def get_insights(
 async def analyze_transactions(
     current_user: User = Depends(get_current_user),
     file_id: Optional[str] = Query(default=None, description="Analyze specific file only"),
+    start_date: Optional[date] = Query(default=None, description="Analyze transactions from this date onwards (inclusive)"),
+    end_date: Optional[date] = Query(default=None, description="Analyze transactions up to this date (inclusive)"),
     background_tasks: BackgroundTasks = None,
 ) -> AnalyzeResponse:
     """Trigger AI analysis of user's transactions.
@@ -157,10 +183,25 @@ async def analyze_transactions(
     user_id = current_user.id
     
     try:
+        if (start_date is None) != (end_date is None):
+            raise HTTPException(
+                status_code=400,
+                detail="Both start_date and end_date must be provided together, or neither",
+            )
+        if start_date and end_date and end_date < start_date:
+            raise HTTPException(status_code=400, detail="end_date must be >= start_date")
+        if file_id is None and start_date is None and end_date is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide either file_id, or (start_date and end_date)",
+            )
+
         # Run the analysis
         insights = transaction_analyzer.analyze(
             user_id=user_id,
             file_id=file_id,
+            start_date=start_date,
+            end_date=end_date,
         )
         
         # Count by type
