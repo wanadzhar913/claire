@@ -32,6 +32,22 @@ ENV NODE_ENV=production
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 
+# Validate required build arguments
+RUN if [ -z "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" ]; then \
+      echo ""; \
+      echo "ERROR: Missing required build argument NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"; \
+      echo ""; \
+      echo "Build this image using one of these methods:"; \
+      echo ""; \
+      echo "  1. Using docker-compose (recommended):"; \
+      echo "     docker compose build web"; \
+      echo ""; \
+      echo "  2. Using docker build with build args:"; \
+      echo "     docker build --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_... ./apps/web"; \
+      echo ""; \
+      exit 1; \
+    fi
+
 # Build the application
 RUN npm run build
 
