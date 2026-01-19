@@ -97,7 +97,7 @@ ECR repositories will be created automatically by the GitHub Actions workflow, b
   - Name: `claire-my`
   - Description: `Security group for Claire application`
   - **Inbound rules**:
-    - SSH (22) from **My IP** (or 0.0.0.0/0 if you prefer)
+    - SSH (22) from **0.0.0.0/0**
     - Custom TCP (3000) from **0.0.0.0/0** (Frontend/Web)
     - Custom TCP (8000) from **0.0.0.0/0** (Backend API)
     - Custom TCP (9000) from **0.0.0.0/0** (MinIO API)
@@ -211,6 +211,8 @@ Add these secrets:
 | `EC2_HOST` | Your EC2 public IP or hostname | EC2 Console → Instances → Public IPv4 address |
 | `EC2_USER` | `ubuntu` (for Ubuntu) or `ec2-user` (for Amazon Linux) | Depends on your AMI |
 | `EC2_SSH_PRIVATE_KEY` | Content of your .pem file | Open the .pem file and copy ALL content including `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----` |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://YOUR_EC2_IP:8000` | Replace `YOUR_EC2_IP` with your EC2 instance's public IP address |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Your Clerk publishable key | Get from Clerk Dashboard → API Keys → Publishable Key |
 
 ### Getting EC2_HOST:
 - Go to **EC2 Console** → **Instances**
