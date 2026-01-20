@@ -16,10 +16,13 @@ Personal finance data is fragmented across bank transactions and uploaded docume
 Claire provides:
 
 - 🌐 A **dashboard** to explore transactions, subscriptions, goals, and cash flow visualizations.
+
 ![dashboard](/assets/claire-2-dashboard-for-transaction-flows.png)
 - A backend API that **ingests transactions/uploads**, stores them, and produces insights.
+
 ![user-upload-interface](/assets/claire-1-interface-for-uploading-statements.png)
 - An **AI-powered chat/insights** layer that can summarize financial activity and suggest actions. Talk to your financial statements and plan.
+
 ![ai-agent-financial-advisor](/assets/claire-4-ai-agent-financial-advisor.png)
 
 ## How It Works (High Level) 🤓
