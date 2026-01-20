@@ -1,25 +1,27 @@
-# Claire
+# Claire 💃🏻
 
-Claire is a personal finance assistant that helps users understand spending, track goals, identify subscriptions, and chat for financial insights.
+Claire is a **personal finance assistant** that helps users understand spending, track goals, identify subscriptions, and chat for financial insights.
 
-## Team members
+## Team Members 👥
 
-- Irfan Naqieb
-- Wan Adzhar Faiq Adzlan
+- [Irfan Naqieb](https://www.linkedin.com/in/irfannaqieb/)
+- [Wan Adzhar Faiq Adzlan](https://www.linkedin.com/in/wan-adzhar-faiq-adzlan-19a27baa/)
 
-## Problem statement
+## Problem Statement 🎯
 
 Personal finance data is fragmented across bank transactions and uploaded documents, making it time-consuming to understand cash flow, detect recurring subscriptions, and turn raw data into actionable insights. Not everyone can afford a dedicated wealth manager, but everyone can access their own financial statements and benefit from an automated assessment that provides similar clarity and guidance.
 
-## Solution overview
+## Solution Overview 👨🏻‍🏫
 
 Claire provides:
 
-- A web dashboard to explore transactions, subscriptions, goals, and cash flow visualizations.
+- 🌐 A web dashboard to explore transactions, subscriptions, goals, and cash flow visualizations.
+![web-dashboard](/assets/claire-2-dashboard-for-transaction-flows.png)
 - A backend API that ingests transactions/uploads, stores them, and produces insights.
+![user-upload-interface](/assets/claire-1-interface-for-uploading-statements.png)
 - An AI-powered chat/insights layer that can summarize financial activity and suggest actions. Talk to your financial statements and plan.
 
-## How it works (high level)
+## How It Works (High Level) 🤓
 
 1. User uploads a statement or transaction export.
 2. Backend extracts and normalizes transactions.
@@ -27,20 +29,24 @@ Claire provides:
 4. Insights are generated and stored.
 5. The dashboard and chat layer query the same underlying data for consistent outputs.
 
-# Who this is for
+# Who This Is For 🧑🏻👧🏻
 
 - Individuals who want a clearer view of spending, subscriptions, and cash flow using statements they already have, and who are looking to improve their overall financial health and achieve personal financial goals.
 
-## Tech stack used
+## Tech Stack Used 🤖
 
-Web: Next.js + shadcn/ui
-Backend: FastAPI (Dockerized)
-Database: Postgres (pgvector for semantic search/embedding use cases)
-Object storage: MinIO (S3-compatible) in dev; S3/R2-compatible in production
-Auth: Clerk (JWT)
-AI: OpenAI models for extraction + chat/insights
+- **Web:** Next.js + shadcn/ui
+- **Backend:** FastAPI (Dockerized)
+- **Database:** Postgres (pgvector for semantic search/embedding use cases)
+- **Object Storage:** MinIO (S3-compatible) in dev; S3/R2-compatible in production
+- **Auth:** Clerk (JWT)
+- **AI:** OpenAI models for extraction + chat/insights
+- **CI/CD:** GitHub Actions
+- **Deployment Platform:** AWS EC2
 
-## Setup instructions
+## Setup Instructions
+
+You can find steps to set up the project **locally** below. For hosting on AWS, you can refer to the [AWS Setup document](/AWS_SETUP.md).
 
 ### Prerequisites
 

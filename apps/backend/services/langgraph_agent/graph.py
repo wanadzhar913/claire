@@ -81,9 +81,9 @@ class LangGraphAgent:
                 "host": settings.POSTGRES_HOST,
                 "port": settings.POSTGRES_PORT,
             }
-            if getattr(settings, "POSTGRES_SSLMODE", None):
-                # mem0 will ignore unknown keys if not supported by the provider
-                pgvector_config["sslmode"] = settings.POSTGRES_SSLMODE
+            # Note: sslmode is not included here because pgvector/mem0 doesn't properly
+            # handle it in the dict config format. The AsyncConnectionPool below uses
+            # a proper connection URL string which includes sslmode correctly.
 
             self.memory = await AsyncMemory.from_config(
                 config_dict={
