@@ -40,13 +40,14 @@ Claire provides:
 ## Tech Stack Used 🤖
 
 - **Web:** Next.js + shadcn/ui
-- **Backend:** FastAPI (Dockerized)
+- **Backend:** FastAPI
 - **Database:** Postgres (pgvector for semantic search/embedding use cases)
 - **Object Storage:** MinIO (S3-compatible) in dev; S3/R2-compatible in production
 - **Auth:** Clerk (JWT)
-- **AI:** OpenAI models for extraction + chat/insights
+- **AI:** OpenAI models for PDF extraction + chat/insights
 - **CI/CD:** GitHub Actions
-- **Deployment Platform:** AWS EC2
+- **Containerization:** Docker
+- **Deployment Platform:** AWS EC2/ECR
 
 ## Setup Instructions 🛠️
 
